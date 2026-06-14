@@ -311,3 +311,21 @@ class ServiceDeployResponse(BaseModel):
     output: str
     message: str
     instance_id: int
+
+
+class ServiceDryRunRequest(BaseModel):
+    device_id: int
+    variable_values: dict
+
+
+class DryRunLine(BaseModel):
+    line: str
+    indent: int          # 0 = top-level, 1 = child
+    status: str          # "new" | "exists" | "parent"
+
+
+class ServiceDryRunResponse(BaseModel):
+    lines: list[DryRunLine]
+    new_count: int
+    exists_count: int
+    device_name: str

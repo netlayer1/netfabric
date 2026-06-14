@@ -57,6 +57,7 @@ from backend.models import (
     ServiceTemplateCreate, ServiceTemplateUpdate, ServiceTemplateResponse,
     ServicePreviewRequest, ServicePreviewResponse,
     ServiceDeployRequest, ServiceDeployResponse,
+    ServiceDryRunRequest, ServiceDryRunResponse, DryRunLine,
 )
 from backend.auth import (
     hash_password, verify_password,
@@ -861,6 +862,80 @@ def preview_service(
     return ServicePreviewResponse(rendered="\n".join(lines), lines=lines)
 
 
+@app.post("/api/services/{svc_id}/dry-run", response_model=ServiceDryRunResponse)
+def dry_run_service(
+    svc_id: int,
+    payload: ServiceDryRunRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Render the template, SSH to the device, pull running config,
+    then compare each line — returns per-line status: new | exists.
+    """
+    svc = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == svc_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not svc:
+        raise HTTPException(status_code=404, detail="Service template not found")
+
+    device = _get_owned_device(payload.device_id, current_user.id, db)
+
+    # 1. Render template → CLI lines
+    rendered_lines = _render_template(svc.template_body, payload.variable_values)
+
+    # 2. Pull running config from device
+    plain_password = decrypt_password(device.encrypted_password)
+    pull = device_connector.pull_device_data(
+        host=device.host,
+        username=device.username,
+        password=plain_password,
+        device_type=device.device_type,
+        port=device.port,
+        analysis_type="config_backup",
+    )
+    if not pull["success"]:
+        raise HTTPException(status_code=502, detail=f"Cannot reach device: {pull['error']}")
+
+    running_config = pull["data"]
+    # Strip header added by pull_device_data
+    if running_config.startswith("### "):
+        running_config = "\n".join(running_config.split("\n")[1:]).strip()
+
+    # 3. Build a flat set of stripped running-config lines for fast lookup
+    running_lines_set = {
+        l.strip() for l in running_config.splitlines()
+        if l.strip() and not l.strip().startswith("!")
+    }
+
+    # 4. Classify each rendered line
+    result_lines: list[DryRunLine] = []
+    new_count = 0
+    exists_count = 0
+
+    for raw in rendered_lines:
+        indent = len(raw) - len(raw.lstrip())
+        stripped = raw.strip()
+
+        # Determine if this line already exists in the running config
+        if stripped in running_lines_set:
+            status = "exists"
+            exists_count += 1
+        else:
+            status = "new"
+            new_count += 1
+
+        result_lines.append(DryRunLine(line=raw, indent=indent, status=status))
+
+    return ServiceDryRunResponse(
+        lines=result_lines,
+        new_count=new_count,
+        exists_count=exists_count,
+        device_name=device.name,
+    )
+
+
 @app.post("/api/services/{svc_id}/deploy", response_model=ServiceDeployResponse)
 def deploy_service(
     svc_id: int,
@@ -904,6 +979,25 @@ def deploy_service(
 
     if not result["success"]:
         raise HTTPException(status_code=502, detail=result.get("error", "Deploy failed"))
+
+    # ── Auto-snapshot: pull running config immediately after deploy ──
+    # This keeps the stored baseline in sync with what the tool just pushed,
+    # so check-sync only flags changes made directly on the router.
+    try:
+        new_config = _fetch_running_config(device, db)
+        snap = ConfigSnapshot(device_id=payload.device_id, config=new_config)
+        db.add(snap)
+        db.add(SyncHistory(
+            device_id=payload.device_id,
+            action="sync",
+            status="synced",
+            detail=f"Auto-snapshot after service deploy '{svc.name}' ({len(new_config):,} bytes)",
+        ))
+        db.commit()
+        logger.info(f"Auto-snapshot saved for device {device.name} after service deploy")
+    except Exception as e:
+        logger.warning(f"Auto-snapshot failed after deploy (device {device.name}): {e}")
+        # Non-fatal — deploy already succeeded
 
     return ServiceDeployResponse(
         status="deployed",

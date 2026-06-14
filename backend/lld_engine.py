@@ -47,6 +47,38 @@ def _config_lines(config: str) -> List[str]:
     ]
 
 
+def _normalize(s: str) -> str:
+    """
+    Normalize a config line for comparison:
+      - Strip and lowercase
+      - Collapse multiple spaces to one
+      - Remove space between interface keyword and its number
+        e.g. "Loopback 101" → "loopback101", "GigabitEthernet 0/1" → "gigabitethernet0/1"
+    """
+    s = s.strip().lower()
+    s = re.sub(r'\s+', ' ', s)                # collapse whitespace
+    s = re.sub(r'([a-z])\s+(\d)', r'\1\2', s) # "loopback 101" → "loopback101"
+    return s
+
+
+def _line_matches(config_line: str, value: str) -> bool:
+    """
+    Case-insensitive, whitespace-normalized match.
+    Rules:
+      1. Exact match after normalization
+      2. Config line starts with value  (command prefix match)
+      3. Value is substring of config line  (e.g. IP inside 'ip address X M')
+    """
+    cl = _normalize(config_line)
+    v  = _normalize(value)
+    return cl == v or cl.startswith(v + " ") or v in cl
+
+
+def _block_header_matches(header: str, block_prefix: str) -> bool:
+    """Normalized case-insensitive block header prefix match."""
+    return _normalize(header).startswith(_normalize(block_prefix))
+
+
 def run_compliance(yaml_content: str, running_config: str) -> List[Dict[str, Any]]:
     """
     Parse yaml_content and check each rule against running_config.
@@ -105,25 +137,25 @@ def _run_check(check: dict, ctype: str, lines: List[str], blocks: Dict[str, List
     # ── must_contain ─────────────────────────────────────────
     if ctype == "must_contain":
         value = check["value"].strip()
-        found = any(l == value or l.startswith(value) for l in lines)
+        hit = next((l for l in lines if _line_matches(l, value)), None)
         return {
-            "status": "pass" if found else "fail",
-            "detail": "" if found else f"Missing: '{value}'",
+            "status": "pass" if hit else "fail",
+            "detail": f"Found: '{hit}'" if hit else f"Missing: '{value}'",
         }
 
     # ── must_not_contain ─────────────────────────────────────
     if ctype == "must_not_contain":
         value = check["value"].strip()
-        hits = [l for l in lines if l == value or l.startswith(value)]
+        hit = next((l for l in lines if _line_matches(l, value)), None)
         return {
-            "status": "fail" if hits else "pass",
-            "detail": f"Found forbidden line: '{hits[0]}'" if hits else "",
+            "status": "fail" if hit else "pass",
+            "detail": f"Found forbidden line: '{hit}'" if hit else "",
         }
 
     # ── must_match_pattern ───────────────────────────────────
     if ctype == "must_match_pattern":
         pattern = check["pattern"]
-        hits = [l for l in lines if re.search(pattern, l)]
+        hits = [l for l in lines if re.search(pattern, l, re.IGNORECASE)]
         return {
             "status": "pass" if hits else "fail",
             "detail": f"Matched: '{hits[0]}'" if hits else f"No line matched pattern: '{pattern}'",
@@ -132,7 +164,7 @@ def _run_check(check: dict, ctype: str, lines: List[str], blocks: Dict[str, List
     # ── must_not_match_pattern ───────────────────────────────
     if ctype == "must_not_match_pattern":
         pattern = check["pattern"]
-        hits = [l for l in lines if re.search(pattern, l)]
+        hits = [l for l in lines if re.search(pattern, l, re.IGNORECASE)]
         return {
             "status": "fail" if hits else "pass",
             "detail": f"Forbidden pattern found: '{hits[0]}'" if hits else "",
@@ -143,12 +175,12 @@ def _run_check(check: dict, ctype: str, lines: List[str], blocks: Dict[str, List
         block_prefix = check["block"].strip()
         value = check["value"].strip()
         matching_blocks = {h: children for h, children in blocks.items()
-                           if h.startswith(block_prefix)}
+                           if _block_header_matches(h, block_prefix)}
         if not matching_blocks:
             return {"status": "fail", "detail": f"Block '{block_prefix}' not found in config"}
         missing_in = []
         for header, children in matching_blocks.items():
-            if not any(c == value or c.startswith(value) for c in children):
+            if not any(_line_matches(c, value) for c in children):
                 missing_in.append(header)
         if missing_in:
             return {"status": "fail",
@@ -160,10 +192,10 @@ def _run_check(check: dict, ctype: str, lines: List[str], blocks: Dict[str, List
         block_prefix = check["block"].strip()
         value = check["value"].strip()
         matching_blocks = {h: children for h, children in blocks.items()
-                           if h.startswith(block_prefix)}
+                           if _block_header_matches(h, block_prefix)}
         found_in = []
         for header, children in matching_blocks.items():
-            if any(c == value or c.startswith(value) for c in children):
+            if any(_line_matches(c, value) for c in children):
                 found_in.append(header)
         if found_in:
             return {"status": "fail",

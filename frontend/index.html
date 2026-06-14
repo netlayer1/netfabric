@@ -291,7 +291,7 @@
       <span></span><span></span><span></span>
     </div>
     <div class="topbar-brand">
-      <strong>Access4</strong> Network Orchestrator
+      <strong>Network</strong> Orchestrator
     </div>
     <div class="topbar-actions">
       <button class="topbar-btn" onclick="showPage('sync')">
@@ -407,7 +407,10 @@
       <!-- SERVICES -->
       <div id="page-services" class="hidden">
         <div class="page-header">
-          <h2>Services</h2>
+          <div>
+            <h2 style="margin-bottom:2px;">Services</h2>
+            <div class="text-muted text-sm" id="svc-count" style="margin-top:2px;"></div>
+          </div>
           <button class="btn btn-primary" onclick="openServiceModal()">+ New Service</button>
         </div>
         <div class="page-content">
@@ -746,72 +749,54 @@
 
 <!-- ── Service Create / Edit Modal ───────────────── -->
 <div id="svc-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSvcModal()">
-  <div class="modal" style="max-width:660px;width:95vw;">
+  <div class="modal" style="width:680px;max-height:90vh;display:flex;flex-direction:column;">
 
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <h3 id="svc-modal-title" style="font-size:15px;">New Service</h3>
-      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeSvcModal()">✕</button>
+    <h3 id="svc-modal-title">New Service</h3>
+
+    <!-- Name + Description -->
+    <div class="form-group">
+      <label>Service Name *</label>
+      <input type="text" id="svc-name" placeholder="e.g. Create Loopback Interface" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="svc-desc" placeholder="Optional — what does this service do?" />
     </div>
 
-    <!-- Name + Description inline -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-      <div class="form-group" style="margin:0;">
-        <label>Name</label>
-        <input type="text" id="svc-name" placeholder="e.g. Create Loopback" />
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label>Description</label>
-        <input type="text" id="svc-desc" placeholder="What does this do?" />
-      </div>
+    <!-- Mode toggle (pill style, 3 tabs) -->
+    <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;">
+      <button id="svc-tab-vars" class="btn btn-primary svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('vars')">Variables</button>
+      <button id="svc-tab-tpl"  class="btn btn-ghost  svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('tpl')">Jinja2 Template</button>
+      <button id="svc-tab-cli"  class="btn btn-ghost  svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('cli')">CLI Paste</button>
     </div>
 
-    <!-- Editor tabs -->
-    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <!-- Tab bar -->
-      <div style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);">
-        <button id="svc-tab-vars" onclick="svcSwitchTab('vars')"
-          style="padding:8px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;
-                 background:var(--bg);color:var(--text);border-right:1px solid var(--border);
-                 border-bottom:2px solid var(--accent);">
-          Variables
-        </button>
-        <button id="svc-tab-tpl" onclick="svcSwitchTab('tpl')"
-          style="padding:8px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;
-                 background:var(--surface);color:var(--muted);border-bottom:2px solid transparent;">
-          Template
-        </button>
-        <div style="flex:1;"></div>
-        <button id="svc-insert-btn" onclick="svcInsertExample(event)"
-          style="padding:8px 14px;font-size:11px;border:none;cursor:pointer;
-                 background:transparent;color:var(--accent);">
-          Insert example
-        </button>
-      </div>
+    <!-- Variables panel -->
+    <div id="svc-panel-vars" class="form-group" style="flex:1;">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Variables <span class="text-muted" style="font-weight:400;">— one per line: <code style="color:var(--accent);font-size:11px;">name:default_value</code></span></span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="svcInsertExample(event)">Insert example</button>
+      </label>
+      <textarea id="svc-schema" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"
+        placeholder="interface_name:Loopback0&#10;ip_address:1.1.1.1&#10;subnet_mask:255.255.255.255&#10;description:Managed by NOC"></textarea>
+    </div>
 
-      <!-- Variables panel -->
-      <div id="svc-panel-vars">
-        <textarea id="svc-schema" rows="16"
-          style="width:100%;background:var(--bg);border:none;outline:none;resize:none;
-                 font-family:monospace;font-size:12px;line-height:1.6;color:var(--text);
-                 padding:14px;box-sizing:border-box;"
-          placeholder="interface_name:Loopback0&#10;ip_address:1.1.1.1&#10;subnet_mask:255.255.255.255&#10;description:Managed by Access4"></textarea>
-        <div style="padding:6px 14px;font-size:10px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border);">
-          Format: <code style="color:var(--accent)">variable_name:default_value</code> — one per line
-        </div>
-      </div>
+    <!-- Template panel -->
+    <div id="svc-panel-tpl" class="form-group hidden" style="flex:1;">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Jinja2 Template <span class="text-muted" style="font-weight:400;">— use <code style="color:var(--accent);font-size:11px;">{{ variable_name }}</code></span></span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="svcInsertExample(event)">Insert example</button>
+      </label>
+      <textarea id="svc-template" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"
+        placeholder="interface {{ interface_name }}&#10; description {{ description }}&#10; ip address {{ ip_address }} {{ subnet_mask }}&#10; no shutdown"></textarea>
+    </div>
 
-      <!-- Template panel (hidden by default) -->
-      <div id="svc-panel-tpl" class="hidden">
-        <textarea id="svc-template" rows="16"
-          style="width:100%;background:var(--bg);border:none;outline:none;resize:none;
-                 font-family:monospace;font-size:12px;line-height:1.6;color:var(--text);
-                 padding:14px;box-sizing:border-box;"
-          placeholder="interface {{ interface_name }}&#10; description {{ description }}&#10; ip address {{ ip_address }} {{ subnet_mask }}&#10; no shutdown"></textarea>
-        <div style="padding:6px 14px;font-size:10px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border);">
-          Use <code style="color:var(--accent)">{{ variable_name }}</code> for substitution
-        </div>
-      </div>
+    <!-- CLI Paste panel -->
+    <div id="svc-panel-cli" class="form-group hidden" style="flex:1;">
+      <label>Paste IOS CLI Config — values will be auto-detected as Jinja2 variables</label>
+      <textarea id="svc-cli" style="font-family:monospace;font-size:12px;min-height:240px;resize:vertical;"
+        placeholder="interface Loopback0&#10; description Managed by NOC&#10; ip address 1.1.1.1 255.255.255.255&#10; no shutdown"></textarea>
+      <div class="text-muted text-sm" style="margin-top:6px;">IP addresses, interface names, and descriptions are auto-extracted as variables.</div>
+      <button class="btn btn-primary" style="margin-top:10px;width:100%;" onclick="svcCliConvert()">⚙ Convert to Variables + Template</button>
     </div>
 
     <div class="modal-footer">
@@ -823,33 +808,73 @@
 
 <!-- ── Service Deploy Modal ───────────────────────── -->
 <div id="svc-deploy-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSvcDeployModal()">
-  <div class="modal" style="max-width:580px;width:95vw;">
-    <div class="flex justify-between items-center" style="margin-bottom:16px;">
-      <h3 id="svc-deploy-title">Deploy Service</h3>
-      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeSvcDeployModal()">✕</button>
+  <div class="modal" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;">
+      <div>
+        <h3 id="svc-deploy-title" style="margin-bottom:2px;">Deploy Service</h3>
+        <div id="svc-deploy-desc" class="text-muted text-sm"></div>
+      </div>
+      <button class="btn btn-ghost" style="font-size:12px;flex-shrink:0;" onclick="closeSvcDeployModal()">✕</button>
     </div>
 
-    <div class="form-group">
+    <!-- Device selector -->
+    <div class="form-group" style="margin-top:14px;margin-bottom:0;">
       <label>Target Device</label>
-      <select id="svc-deploy-device"></select>
+      <select id="svc-deploy-device" onchange="livePreview()"></select>
     </div>
 
-    <div id="svc-deploy-vars" style="margin-bottom:14px;"></div>
+    <!-- Two-panel body -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;flex:1;min-height:0;overflow:hidden;">
 
-    <!-- Preview panel -->
-    <div id="svc-preview-panel" class="hidden"
-         style="margin-bottom:14px;border:1px solid var(--border);border-radius:6px;padding:12px;background:var(--bg);">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Preview — commands to be sent:</div>
-      <pre id="svc-preview-pre" style="font-size:11px;line-height:1.6;white-space:pre;overflow:auto;max-height:200px;margin:0;"></pre>
+      <!-- Left: Variable form -->
+      <div style="overflow-y:auto;">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">
+          Fill in Variables
+        </div>
+        <div id="svc-deploy-vars"></div>
+      </div>
+
+      <!-- Right: Dry Run panel -->
+      <div style="display:flex;flex-direction:column;min-height:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">
+            Dry Run
+          </div>
+          <button id="svc-dryrun-btn" class="btn btn-ghost" style="font-size:11px;padding:3px 10px;"
+                  onclick="runDryRun()">▶ Run Dry Run</button>
+        </div>
+        <!-- Status bar -->
+        <div id="svc-dryrun-status" style="font-size:11px;color:var(--muted);margin-bottom:8px;min-height:16px;"></div>
+        <!-- Results -->
+        <div id="svc-dryrun-results"
+             style="flex:1;overflow:auto;background:var(--bg);border:1px solid var(--border);
+                    border-radius:6px;padding:10px 0;font-family:monospace;font-size:12px;
+                    line-height:1.8;min-height:200px;">
+          <div style="padding:10px 14px;color:var(--muted);">Fill in variables, select a device, then click Run Dry Run to see what will change on the router.</div>
+        </div>
+        <!-- Legend -->
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;">
+          <span><span style="color:#6fdb6f;font-weight:700;">●</span> Will be added</span>
+          <span><span style="color:var(--muted);font-weight:700;">●</span> Already exists</span>
+        </div>
+      </div>
+
     </div>
 
-    <div class="modal-footer">
+    <div class="modal-footer" style="margin-top:14px;">
       <button class="btn btn-ghost" onclick="closeSvcDeployModal()">Cancel</button>
-      <button class="btn btn-ghost" onclick="previewService()">👁 Preview</button>
-      <button class="btn btn-primary" onclick="deployService()" id="svc-deploy-btn">▶ Deploy</button>
+      <button class="btn btn-primary" onclick="deployService()" id="svc-deploy-btn">▶ Deploy to Device</button>
     </div>
   </div>
 </div>
+
+<style>
+.dryrun-new    { color: #6fdb6f; }
+.dryrun-exists { color: var(--muted); }
+.dryrun-line   { padding: 1px 14px; white-space: pre; }
+</style>
 
 <!-- ── IPAM: Add/Edit Subnet Modal ───────────────── -->
 <div id="ipam-subnet-modal" class="modal-overlay hidden">
@@ -1394,24 +1419,51 @@ async function loadServices() {
 }
 
 function renderServicesList(svcs) {
+  const countEl = document.getElementById('svc-count');
+  if (countEl) countEl.textContent = `${svcs.length} service${svcs.length !== 1 ? 's' : ''}`;
   const list = document.getElementById('services-list');
   if (!svcs.length) {
-    list.innerHTML = '<div class="text-muted text-sm">No services yet — click <strong>+ New Service</strong> to create one.</div>';
+    list.innerHTML = `<div class="card" style="padding:32px;text-align:center;color:var(--muted);">
+      No services yet — click <strong style="color:var(--text);">+ New Service</strong> to create one.
+    </div>`;
     return;
   }
-  list.innerHTML = svcs.map(s => `
-    <div class="device-card" style="margin-bottom:12px;">
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:14px;">${escHtml(s.name)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${escHtml(s.description || 'No description')}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Updated ${new Date(s.updated_at).toLocaleDateString()}</div>
+  list.innerHTML = svcs.map(s => {
+    // count variables from schema
+    const varLines = (s.variables_schema || '').split('\n').filter(l => l.trim() && l.includes(':'));
+    const varCount = varLines.length;
+    // count template lines
+    const tplLines = (s.template_body || '').split('\n').filter(l => l.trim()).length;
+    return `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <!-- Card top -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px;">${escHtml(s.name)}</div>
+          <div class="text-muted text-sm">${escHtml(s.description || 'No description')}</div>
+        </div>
+        <button class="btn btn-primary" style="white-space:nowrap;flex-shrink:0;" onclick="openDeployModal(${s.id})">▶ Deploy</button>
       </div>
-      <div class="device-card-actions">
-        <button class="btn btn-primary btn-sm" onclick="openDeployModal(${s.id})">▶ Deploy</button>
-        <button class="btn btn-ghost btn-sm"   onclick="openServiceModal(${s.id})">✏ Edit</button>
-        <button class="btn btn-ghost btn-sm"   style="color:#e05252;" onclick="deleteSvcTemplate(${s.id})">✕</button>
+      <!-- Card footer -->
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:10px 20px;background:var(--surface);border-top:1px solid var(--border);">
+        <div style="display:flex;gap:16px;">
+          <span class="text-muted text-sm">
+            <span style="color:var(--accent);font-weight:600;">${varCount}</span> variable${varCount !== 1 ? 's' : ''}
+          </span>
+          <span class="text-muted text-sm">
+            <span style="color:var(--text);font-weight:600;">${tplLines}</span> template line${tplLines !== 1 ? 's' : ''}
+          </span>
+          <span class="text-muted text-sm">Updated ${new Date(s.updated_at).toLocaleDateString()}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="nso-btn" onclick="openServiceModal(${s.id})">Edit</button>
+          <button class="nso-btn" style="border-color:#f8514966;color:var(--danger);background:#2a0a0a;"
+            onclick="deleteSvcTemplate(${s.id})">Delete</button>
+        </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function openServiceModal(id = null) {
@@ -1421,6 +1473,7 @@ async function openServiceModal(id = null) {
   document.getElementById('svc-desc').value     = '';
   document.getElementById('svc-schema').value   = '';
   document.getElementById('svc-template').value = '';
+  document.getElementById('svc-cli').value      = '';
 
   if (id) {
     try {
@@ -1429,7 +1482,7 @@ async function openServiceModal(id = null) {
       document.getElementById('svc-desc').value     = svc.description;
       document.getElementById('svc-schema').value   = svc.variables_schema;
       document.getElementById('svc-template').value = svc.template_body;
-    } catch(e) { toast('Failed to load service', 'error'); return; }
+    } catch(e) { showToast('Failed to load service', 'error'); return; }
   }
   svcSwitchTab('vars');
   document.getElementById('svc-modal').classList.remove('hidden');
@@ -1467,18 +1520,138 @@ async function saveSvcTemplate() {
 }
 
 function svcSwitchTab(tab) {
-  const isVars = tab === 'vars';
-  document.getElementById('svc-panel-vars').classList.toggle('hidden', !isVars);
-  document.getElementById('svc-panel-tpl').classList.toggle('hidden', isVars);
+  ['vars','tpl','cli'].forEach(t => {
+    document.getElementById(`svc-panel-${t}`).classList.toggle('hidden', t !== tab);
+    const btn = document.getElementById(`svc-tab-${t}`);
+    if (btn) {
+      btn.className = `btn ${t === tab ? 'btn-primary' : 'btn-ghost'} svc-mode-btn`;
+      btn.style.cssText = 'border-radius:0;font-size:12px;padding:6px 16px;';
+    }
+  });
+}
 
-  const btnVars = document.getElementById('svc-tab-vars');
-  const btnTpl  = document.getElementById('svc-tab-tpl');
-  btnVars.style.background      = isVars ? 'var(--bg)'      : 'var(--surface)';
-  btnVars.style.color           = isVars ? 'var(--text)'    : 'var(--muted)';
-  btnVars.style.borderBottom    = isVars ? '2px solid var(--accent)' : '2px solid transparent';
-  btnTpl.style.background       = isVars ? 'var(--surface)' : 'var(--bg)';
-  btnTpl.style.color            = isVars ? 'var(--muted)'   : 'var(--text)';
-  btnTpl.style.borderBottom     = isVars ? '2px solid transparent' : '2px solid var(--accent)';
+function svcCliConvert() {
+  const raw = document.getElementById('svc-cli').value;
+  if (!raw.trim()) { showToast('Paste some CLI config first', 'error'); return; }
+
+  const vars     = {};   // varName → defaultValue (insertion-ordered)
+  const tplLines = [];
+  const SKIP_RE  = /^(current configuration|building configuration|end\s*$|!)/i;
+  const IP_RE    = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/;
+
+  // Sanitize to valid Jinja2 variable name
+  function toVarName(s) {
+    return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+
+  // Register var; return the name used
+  function setVar(name, defaultVal) {
+    name = toVarName(name);
+    if (!(name in vars)) vars[name] = defaultVal;
+    return name;
+  }
+
+  // Replace every IP address in `text` with {{ varBaseName }} / {{ varBaseName_1 }} …
+  // Non-IP tokens are left untouched.
+  function parameteriseIPs(text, baseName) {
+    let idx = 0;
+    return text.replace(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/g, (ip) => {
+      const vname = setVar(idx === 0 ? baseName : `${baseName}_${idx}`, ip);
+      idx++;
+      return `{{ ${vname} }}`;
+    });
+  }
+
+  for (const rawLine of raw.split('\n')) {
+    const line    = rawLine.trim();
+    const isChild = rawLine.length > 0 && (rawLine[0] === ' ' || rawLine[0] === '\t');
+
+    if (!line || SKIP_RE.test(line)) continue;
+
+    if (!isChild) {
+      // ── interface <Type><Num>  e.g. "interface Loopback0", "interface GigabitEthernet0/1" ──
+      const ifM = line.match(/^interface\s+([A-Za-z\-]+)\s*([\d\/\.]+(?:\.\d+)?)/i);
+      if (ifM) {
+        const vname = setVar('name', ifM[2].trim());
+        tplLines.push(`interface ${ifM[1]}{{ ${vname} }}`);
+        continue;
+      }
+
+      // ── router <protocol> [process-id/ASN]  e.g. "router ospf 1", "router bgp 65000" ──
+      const rtrM = line.match(/^router\s+(\S+)(?:\s+(\d+))?/i);
+      if (rtrM) {
+        if (rtrM[2] !== undefined) {
+          const vname = setVar(`${toVarName(rtrM[1])}_process`, rtrM[2]);
+          tplLines.push(`router ${rtrM[1]} {{ ${vname} }}`);
+        } else {
+          tplLines.push(`router ${rtrM[1]}`);
+        }
+        continue;
+      }
+
+      // ── Generic top-level: parameterise IPs if any, keep the rest ──
+      if (IP_RE.test(line)) {
+        const kwM = line.match(/^(\S+)\s+(.*)/);
+        if (kwM) {
+          const newRest = parameteriseIPs(kwM[2], toVarName(kwM[1]));
+          tplLines.push(`${kwM[1]} ${newRest}`);
+          continue;
+        }
+      }
+      tplLines.push(line);
+
+    } else {
+      // ── Child (indented) commands ──────────────────────────
+
+      // "ip address A.B.C.D M.M.M.M"
+      const ipAddrM = line.match(/^ip address\s+(\S+)\s+(\S+)/i);
+      if (ipAddrM) {
+        const iv = setVar('ip_address', ipAddrM[1]);
+        const mv = setVar('netmask',    ipAddrM[2]);
+        tplLines.push(` ip address {{ ${iv} }} {{ ${mv} }}`);
+        continue;
+      }
+
+      // "no ip address" → parameterise
+      if (/^no ip address$/i.test(line)) {
+        const iv = setVar('ip_address', '');
+        const mv = setVar('netmask', '255.255.255.255');
+        tplLines.push(` ip address {{ ${iv} }} {{ ${mv} }}`);
+        continue;
+      }
+
+      // "description TEXT"
+      const descM = line.match(/^description\s+(.*)/i);
+      if (descM) {
+        const vname = setVar('description', descM[1]);
+        tplLines.push(` description {{ ${vname} }}`);
+        continue;
+      }
+
+      // Generic child: "keyword [rest with IPs]"
+      // e.g. "router-id 1.1.1.1" → {{ router_id }}
+      //      "network 10.0.0.0 0.0.0.255 area 0" → {{ network }} {{ network_1 }} area 0
+      if (IP_RE.test(line)) {
+        const kwM = line.match(/^([\w\-]+)\s+(.*)/);
+        if (kwM) {
+          const newRest = parameteriseIPs(kwM[2], toVarName(kwM[1]));
+          tplLines.push(` ${kwM[1]} ${newRest}`);
+          continue;
+        }
+      }
+
+      // Fallback: keep as-is
+      tplLines.push(' ' + line);
+    }
+  }
+
+  const schema = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join('\n');
+  document.getElementById('svc-schema').value   = schema;
+  document.getElementById('svc-template').value = tplLines.join('\n');
+
+  const count = Object.keys(vars).length;
+  showToast(`Converted — ${count} variable${count !== 1 ? 's' : ''} extracted`, 'success');
+  svcSwitchTab('vars');
 }
 
 function svcInsertExample(e) {
@@ -1489,7 +1662,7 @@ function svcInsertExample(e) {
 `interface_name:Loopback0
 ip_address:1.1.1.1
 subnet_mask:255.255.255.255
-description:Managed by Access4`;
+description:Managed by NOC`;
   } else {
     document.getElementById('svc-template').value =
 `interface {{ interface_name }}
@@ -1507,8 +1680,11 @@ function insertTemplateExample(e) { svcSwitchTab('tpl');  svcInsertExample(e); }
 
 async function openDeployModal(svcId) {
   _svcDeployId = svcId;
-  document.getElementById('svc-preview-panel').classList.add('hidden');
-  document.getElementById('svc-preview-pre').textContent = '';
+  document.getElementById('svc-dryrun-results').innerHTML =
+    '<div style="padding:10px 14px;color:var(--muted);">Fill in variables, select a device, then click Run Dry Run to see what will change on the router.</div>';
+  document.getElementById('svc-dryrun-status').textContent = '';
+  document.getElementById('svc-dryrun-btn').textContent = '▶ Run Dry Run';
+  document.getElementById('svc-dryrun-btn').disabled = false;
 
   try {
     const [svc, devs] = await Promise.all([
@@ -1516,7 +1692,8 @@ async function openDeployModal(svcId) {
       api('GET', '/api/devices'),
     ]);
 
-    document.getElementById('svc-deploy-title').textContent = `Deploy: ${svc.name}`;
+    document.getElementById('svc-deploy-title').textContent = svc.name;
+    document.getElementById('svc-deploy-desc').textContent  = svc.description || '';
 
     const sel = document.getElementById('svc-deploy-device');
     if (!devs.length) {
@@ -1529,15 +1706,16 @@ async function openDeployModal(svcId) {
 
     buildVarForm(svc.variables_schema);
     document.getElementById('svc-deploy-modal').classList.remove('hidden');
-  } catch(e) { toast(e.message || 'Failed to open deploy', 'error'); }
+    livePreview();   // show initial preview with defaults
+  } catch(e) { showToast(e.message || 'Failed to open deploy', 'error'); }
 }
 
 function buildVarForm(schemaYaml) {
-  // Simple format: one variable per line → "key:default_value"
-  // e.g.  interface_name:Loopback0
-  //       ip_address:1.1.1.1
   const container = document.getElementById('svc-deploy-vars');
-  if (!schemaYaml || !schemaYaml.trim()) { container.innerHTML = ''; return; }
+  if (!schemaYaml || !schemaYaml.trim()) {
+    container.innerHTML = '<div class="text-muted text-sm">No variables — this service has no parameters.</div>';
+    return;
+  }
 
   const entries = [];
   for (const raw of schemaYaml.split('\n')) {
@@ -1553,15 +1731,64 @@ function buildVarForm(schemaYaml) {
   if (!entries.length) { container.innerHTML = ''; return; }
 
   container.innerHTML = entries.map(([key, defVal]) => {
-    // Humanise key: underscores → spaces, title-case
     const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     return `
       <div class="form-group">
         <label>${escHtml(label)}</label>
         <input type="text" data-varkey="${escHtml(key)}"
-               value="${escHtml(defVal)}" placeholder="${escHtml(defVal)}" />
+               value="${escHtml(defVal)}" placeholder="${escHtml(defVal || key)}"
+               oninput="livePreview()" />
       </div>`;
   }).join('');
+}
+
+function livePreview() { /* no-op — dry run replaces auto-preview */ }
+
+async function runDryRun() {
+  if (!_svcDeployId) return;
+  const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
+  if (!deviceId) { showToast('Select a device first', 'error'); return; }
+
+  const btn      = document.getElementById('svc-dryrun-btn');
+  const statusEl = document.getElementById('svc-dryrun-status');
+  const results  = document.getElementById('svc-dryrun-results');
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  statusEl.textContent = 'SSHing to device and pulling running config…';
+  results.innerHTML = '<div style="padding:10px 14px;color:var(--muted);">Connecting to router…</div>';
+
+  try {
+    const resp = await api('POST', `/api/services/${_svcDeployId}/dry-run`, {
+      device_id:       deviceId,
+      variable_values: _collectVarValues(),
+    });
+
+    // Build color-coded output
+    const html = resp.lines.map(l => {
+      const cls  = l.status === 'new' ? 'dryrun-new' : 'dryrun-exists';
+      const icon = l.status === 'new' ? '+ ' : '  ';
+      return `<div class="dryrun-line ${cls}">${icon}${escHtml(l.line)}</div>`;
+    }).join('');
+
+    results.innerHTML = html || '<div style="padding:10px 14px;color:var(--muted);">(empty template)</div>';
+
+    const { new_count, exists_count, device_name } = resp;
+    if (new_count === 0) {
+      statusEl.innerHTML = `<span style="color:var(--success);">✔ Device already compliant — nothing to push on ${escHtml(device_name)}</span>`;
+    } else {
+      statusEl.innerHTML =
+        `<span style="color:#6fdb6f;font-weight:600;">${new_count} line${new_count !== 1 ? 's' : ''} will be added</span>` +
+        (exists_count ? ` &nbsp;·&nbsp; <span style="color:var(--muted);">${exists_count} already exist</span>` : '') +
+        ` &nbsp;·&nbsp; on <strong>${escHtml(device_name)}</strong>`;
+    }
+  } catch(e) {
+    results.innerHTML = `<div style="padding:10px 14px;color:var(--danger);">⚠ ${escHtml(e.message || 'Dry run failed')}</div>`;
+    statusEl.textContent = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Re-run';
+  }
 }
 
 function closeSvcDeployModal() {
@@ -1577,21 +1804,10 @@ function _collectVarValues() {
   return vars;
 }
 
-async function previewService() {
-  if (!_svcDeployId) return;
-  try {
-    const resp = await api('POST', `/api/services/${_svcDeployId}/preview`, {
-      variable_values: _collectVarValues(),
-    });
-    document.getElementById('svc-preview-pre').textContent = resp.rendered;
-    document.getElementById('svc-preview-panel').classList.remove('hidden');
-  } catch(e) { toast(e.message || 'Preview failed', 'error'); }
-}
-
 async function deployService() {
   if (!_svcDeployId) return;
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
-  if (!deviceId) { toast('Select a device', 'error'); return; }
+  if (!deviceId) { showToast('Select a device', 'error'); return; }
 
   const btn = document.getElementById('svc-deploy-btn');
   btn.disabled = true; btn.textContent = 'Deploying…';
@@ -1601,10 +1817,10 @@ async function deployService() {
       device_id:       deviceId,
       variable_values: _collectVarValues(),
     });
-    toast(`Deployed — ${resp.lines_sent} commands sent`, 'success');
+    showToast(`Deployed — ${resp.lines_sent} commands sent`, 'success');
     closeSvcDeployModal();
-  } catch(e) { toast(e.message || 'Deploy failed', 'error'); }
-  btn.disabled = false; btn.textContent = '▶ Deploy';
+  } catch(e) { showToast(e.message || 'Deploy failed', 'error'); }
+  finally { btn.disabled = false; btn.textContent = '▶ Deploy to Device'; }
 }
 
 async function deleteSvcTemplate(id) {
