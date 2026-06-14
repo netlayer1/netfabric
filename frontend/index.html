@@ -664,7 +664,15 @@
       <button class="btn btn-ghost" style="font-size:12px;" onclick="closeDiffModal()">✕</button>
     </div>
     <div id="diff-modal-status" style="margin-bottom:12px;"></div>
-    <pre id="diff-modal-body" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:60vh;font-size:12px;line-height:1.6;white-space:pre;"></pre>
+    <pre id="diff-modal-body" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:55vh;font-size:12px;line-height:1.6;white-space:pre;"></pre>
+    <!-- Accept / Reject footer — shown only when out-of-sync -->
+    <div id="diff-modal-footer" class="hidden" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <span class="text-muted text-sm">The live device config differs from your stored snapshot. Accept the live config as the new baseline?</span>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" onclick="closeDiffModal()">Ignore</button>
+        <button class="btn btn-success" id="diff-accept-btn" onclick="acceptSyncChanges()">✔ Accept &amp; Update Snapshot</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2077,7 +2085,10 @@ function showPreviewPanel(preview, configText, applyBtn, applyBtnOrig) {
   });
 }
 
+let _diffDeviceId = null;
+
 function openDiffModal(r, deviceId) {
+  _diffDeviceId = deviceId;
   const d = (devices || []).find(x => x.id === deviceId);
   document.getElementById('diff-modal-title').textContent =
     `Check Sync — ${d ? d.name : 'Device ' + deviceId}`;
@@ -2098,9 +2109,47 @@ function openDiffModal(r, deviceId) {
       return escHtml(line);
     }).join('\n');
   }
+
+  // Show accept footer only when out-of-sync
+  const footer = document.getElementById('diff-modal-footer');
+  if (r.status === 'out-of-sync') {
+    footer.classList.remove('hidden');
+    footer.style.display = 'flex';
+  } else {
+    footer.classList.add('hidden');
+  }
+
   document.getElementById('diff-modal').classList.remove('hidden');
 }
-function closeDiffModal() { document.getElementById('diff-modal').classList.add('hidden'); }
+
+function closeDiffModal() {
+  document.getElementById('diff-modal').classList.add('hidden');
+  document.getElementById('diff-modal-footer').classList.add('hidden');
+  _diffDeviceId = null;
+}
+
+async function acceptSyncChanges() {
+  if (!_diffDeviceId) return;
+  const btn = document.getElementById('diff-accept-btn');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  try {
+    await api('POST', `/api/devices/${_diffDeviceId}/sync`);
+    showToast('Snapshot updated — device is now in sync', 'success');
+    closeDiffModal();
+    _updateDeviceSyncBadge(_diffDeviceId, 'synced');
+    // Refresh backups list if open
+    if (_backupsDeviceId === _diffDeviceId) {
+      const snaps = await api('GET', `/api/devices/${_diffDeviceId}/snapshots`);
+      renderBackupsList(snaps, _diffDeviceId);
+    }
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✔ Accept & Update Snapshot';
+  }
+}
 
 // ════════════════════════════════════════════════
 // IPAM
@@ -2448,40 +2497,27 @@ if (token) { initApp(); }
       <label>Description</label>
       <input id="lld-modal-desc" placeholder="Optional" />
     </div>
-    <div class="form-group" style="flex:1;">
-      <label>YAML Rules</label>
-      <textarea id="lld-modal-yaml" style="font-family:monospace;font-size:12px;min-height:320px;resize:vertical;" placeholder="checks:
-  - id: ssh_v2
-    description: SSH version 2 must be enabled
-    type: must_contain
-    value: ip ssh version 2
 
-  - id: no_telnet
-    description: Telnet must be disabled
-    type: must_not_contain
-    value: transport input telnet
-
-  - id: ntp_configured
-    description: At least one NTP server configured
-    type: must_match_pattern
-    pattern: 'ntp server \d+'
-
-  - id: vty_ssh_only
-    description: VTY lines must only allow SSH
-    type: block_must_contain
-    block: line vty
-    value: transport input ssh
-
-  - id: service_pwd_enc
-    description: Service password-encryption enabled
-    type: must_contain
-    value: service password-encryption
-
-  - id: no_http
-    description: HTTP server must be disabled
-    type: must_not_match_pattern
-    pattern: '^ip http server$'"></textarea>
+    <!-- Mode toggle -->
+    <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;">
+      <button id="lld-mode-yaml-btn" class="btn btn-primary" style="border-radius:0;font-size:12px;padding:6px 14px;" onclick="setLldMode('yaml')">YAML Rules</button>
+      <button id="lld-mode-cli-btn"  class="btn btn-ghost"   style="border-radius:0;font-size:12px;padding:6px 14px;" onclick="setLldMode('cli')">CLI Paste</button>
     </div>
+
+    <!-- YAML mode -->
+    <div id="lld-yaml-panel" class="form-group" style="flex:1;">
+      <label>YAML Rules</label>
+      <textarea id="lld-modal-yaml" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"></textarea>
+    </div>
+
+    <!-- CLI mode -->
+    <div id="lld-cli-panel" class="form-group hidden" style="flex:1;">
+      <label>Paste IOS Config Lines — each line will be checked as a required config statement</label>
+      <textarea id="lld-modal-cli" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"
+        placeholder="Paste your LLD config here…"></textarea>
+      <div class="text-muted text-sm" style="margin-top:6px;">Lines starting with <code>!</code> or blank lines are ignored. Indented lines (child config) are checked within their parent block.</div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeLldModal()">Cancel</button>
       <button class="btn btn-primary" onclick="submitLldTemplate()">Save Template</button>
@@ -2512,6 +2548,62 @@ if (token) { initApp(); }
 
 let lldTemplates = [];
 let lldActiveTemplateId = null;
+let lldMode = 'yaml'; // 'yaml' | 'cli'
+
+function setLldMode(mode) {
+  lldMode = mode;
+  document.getElementById('lld-yaml-panel').classList.toggle('hidden', mode !== 'yaml');
+  document.getElementById('lld-cli-panel').classList.toggle('hidden', mode !== 'cli');
+  document.getElementById('lld-mode-yaml-btn').className = `btn ${mode === 'yaml' ? 'btn-primary' : 'btn-ghost'}` + ' ' + 'lld-mode-btn';
+  document.getElementById('lld-mode-cli-btn').className  = `btn ${mode === 'cli'  ? 'btn-primary' : 'btn-ghost'}` + ' ' + 'lld-mode-btn';
+  document.querySelectorAll('.lld-mode-btn').forEach(b => b.style.cssText = 'border-radius:0;font-size:12px;padding:6px 14px;');
+}
+
+function cliToYaml(cliText) {
+  /* Convert pasted IOS config lines into YAML checks.
+     Top-level lines  → must_contain
+     Indented lines   → block_must_contain against the last top-level header */
+  const lines = cliText.split('\n');
+  const checks = [];
+  let currentBlock = null;
+  let idx = 0;
+
+  for (const raw of lines) {
+    if (!raw.trim() || raw.trim().startsWith('!')) continue;
+    const isChild = raw[0] === ' ' || raw[0] === '\t';
+    const line = raw.trim();
+    idx++;
+
+    if (!isChild) {
+      currentBlock = line;
+      checks.push({
+        id: `check_${idx}`,
+        description: `Required: ${line}`,
+        type: 'must_contain',
+        value: line,
+      });
+    } else if (currentBlock) {
+      checks.push({
+        id: `check_${idx}`,
+        description: `${currentBlock} must contain: ${line}`,
+        type: 'block_must_contain',
+        block: currentBlock,
+        value: line,
+      });
+    }
+  }
+
+  // Serialize to YAML string
+  const yamlLines = ['checks:'];
+  for (const c of checks) {
+    yamlLines.push(`  - id: ${c.id}`);
+    yamlLines.push(`    description: "${c.description.replace(/"/g, "'")}"`);
+    yamlLines.push(`    type: ${c.type}`);
+    if (c.value !== undefined) yamlLines.push(`    value: "${c.value}"`);
+    if (c.block  !== undefined) yamlLines.push(`    block: "${c.block}"`);
+  }
+  return yamlLines.join('\n');
+}
 
 async function loadLldTemplates() {
   const el = document.getElementById('lld-template-list');
@@ -2544,12 +2636,93 @@ async function loadLldTemplates() {
   }
 }
 
+const LLD_DEFAULT_YAML = `checks:
+  # ── Management Plane ─────────────────────────────────────────
+  - id: ssh_v2
+    description: SSH version 2 must be enabled
+    type: must_contain
+    value: ip ssh version 2
+
+  - id: no_telnet_global
+    description: Telnet service must be disabled
+    type: must_not_contain
+    value: service telnet
+
+  - id: vty_transport_ssh
+    description: VTY lines must restrict transport to SSH only
+    type: block_must_contain
+    block: line vty
+    value: transport input ssh
+
+  - id: vty_login_local
+    description: VTY lines must use local authentication
+    type: block_must_contain
+    block: line vty
+    value: login local
+
+  - id: con_login_local
+    description: Console line must use local authentication
+    type: block_must_contain
+    block: line con 0
+    value: login local
+
+  # ── Security Hardening ────────────────────────────────────────
+  - id: service_pwd_enc
+    description: Service password-encryption must be enabled
+    type: must_contain
+    value: service password-encryption
+
+  - id: aaa_new_model
+    description: AAA new-model must be enabled
+    type: must_contain
+    value: aaa new-model
+
+  - id: no_http_server
+    description: HTTP server must be disabled
+    type: must_not_match_pattern
+    pattern: '^ip http server$'
+
+  - id: no_cdp_global
+    description: CDP should be disabled globally
+    type: must_not_contain
+    value: cdp run
+
+  # ── NTP & Logging ─────────────────────────────────────────────
+  - id: ntp_configured
+    description: At least one NTP server must be configured
+    type: must_match_pattern
+    pattern: 'ntp server \\d+'
+
+  - id: logging_configured
+    description: Remote syslog server must be configured
+    type: must_match_pattern
+    pattern: 'logging \\d+\\.\\d+\\.\\d+\\.\\d+'
+
+  - id: logging_buffered
+    description: Logging buffered must be configured
+    type: must_match_pattern
+    pattern: 'logging buffered'
+
+  # ── Routing & Control Plane ───────────────────────────────────
+  - id: no_ip_source_route
+    description: IP source routing must be disabled
+    type: must_contain
+    value: no ip source-route
+
+  - id: no_ip_proxy_arp
+    description: IP proxy-arp should be disabled on interfaces
+    type: must_not_contain
+    value: ip proxy-arp
+`;
+
 function openLldModal(templateId) {
   document.getElementById('lld-modal-id').value = '';
   document.getElementById('lld-modal-name').value = '';
   document.getElementById('lld-modal-desc').value = '';
-  document.getElementById('lld-modal-yaml').value = '';
+  document.getElementById('lld-modal-yaml').value = LLD_DEFAULT_YAML;
+  document.getElementById('lld-modal-cli').value = '';
   document.getElementById('lld-modal-title').textContent = 'New LLD Template';
+  setLldMode('yaml');
 
   if (templateId) {
     const t = lldTemplates.find(x => x.id === templateId);
@@ -2559,6 +2732,7 @@ function openLldModal(templateId) {
       document.getElementById('lld-modal-desc').value = t.description;
       document.getElementById('lld-modal-yaml').value = t.yaml_content;
       document.getElementById('lld-modal-title').textContent = 'Edit LLD Template';
+      setLldMode('yaml');
     }
   }
   document.getElementById('lld-modal').classList.remove('hidden');
@@ -2570,13 +2744,21 @@ function closeLldModal() {
 
 async function submitLldTemplate() {
   const id = document.getElementById('lld-modal-id').value;
+  let yaml_content;
+  if (lldMode === 'cli') {
+    const cliText = document.getElementById('lld-modal-cli').value.trim();
+    if (!cliText) { showToast('Paste some CLI config lines first', 'error'); return; }
+    yaml_content = cliToYaml(cliText);
+  } else {
+    yaml_content = document.getElementById('lld-modal-yaml').value;
+  }
   const payload = {
     name: document.getElementById('lld-modal-name').value.trim(),
     description: document.getElementById('lld-modal-desc').value.trim(),
-    yaml_content: document.getElementById('lld-modal-yaml').value,
+    yaml_content,
   };
   if (!payload.name) { showToast('Template name is required', 'error'); return; }
-  if (!payload.yaml_content.trim()) { showToast('YAML rules are required', 'error'); return; }
+  if (!payload.yaml_content.trim()) { showToast('Rules are required', 'error'); return; }
   try {
     if (id) {
       await api('PUT', `/api/lld/templates/${id}`, payload);

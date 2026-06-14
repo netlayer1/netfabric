@@ -60,6 +60,11 @@ def run_compliance(yaml_content: str, running_config: str) -> List[Dict[str, Any
         return [{"id": "yaml_parse_error", "description": "YAML parse error",
                  "type": "internal", "status": "fail", "detail": str(e)}]
 
+    if not isinstance(template, dict):
+        return [{"id": "yaml_structure_error", "description": "YAML must be a mapping with a 'checks' key",
+                 "type": "internal", "status": "fail",
+                 "detail": f"Got {type(template).__name__} instead of dict. Wrap your checks under 'checks:' at the top level."}]
+
     checks = template.get("checks", [])
     if not checks:
         return [{"id": "no_checks", "description": "No checks defined in template",
