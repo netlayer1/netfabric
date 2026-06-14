@@ -1,0 +1,2675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Network AI Orchestrator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <style>
+    /* ── Reset & Base ─────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #1f3a5f;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --purple: #bc8cff;
+      --radius: 8px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; }
+    pre, code { font-family: "JetBrains Mono", "Fira Code", monospace; }
+
+    /* ── Utilities ───────────────────────────── */
+    .hidden { display: none !important; }
+    .flex { display: flex; }
+    .gap-2 { gap: 8px; }
+    .gap-4 { gap: 16px; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .text-muted { color: var(--muted); }
+    .text-success { color: var(--success); }
+    .text-danger { color: var(--danger); }
+    .text-accent { color: var(--accent); }
+    .text-sm { font-size: 12px; }
+    .mt-2 { margin-top: 8px; }
+    .mt-4 { margin-top: 16px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    }
+    .badge-success { background: rgba(63,185,80,.15); color: var(--success); }
+    .badge-danger  { background: rgba(248,81,73,.15);  color: var(--danger);  }
+    .badge-warning { background: rgba(210,153,34,.15); color: var(--warning); }
+    .badge-accent  { background: var(--accent-dim);    color: var(--accent);  }
+
+    /* ── Cards & Forms ───────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 13px; outline: none;
+      transition: border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 16px; border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary  { background: var(--accent); color: #0d1117; }
+    .btn-ghost    { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-danger   { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+
+    /* NSO-style action button */
+    .nso-btn {
+      display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px;
+      font-weight: 600; cursor: pointer; border: 1px solid #2ea84366;
+      background: #0f2d1a; color: #3fb950; white-space: nowrap;
+      transition: background .15s, color .15s;
+    }
+    .nso-btn:hover   { background: #3fb950; color: #0d1117; }
+    .nso-btn:disabled { opacity: .45; cursor: wait; }
+    .device-table-row:hover { background: #161b22aa; }
+    .device-table-row:hover td { background: transparent; }
+    .btn-success  { background: var(--success); color: #0d1117; }
+    .btn:hover:not(:disabled) { opacity: .85; }
+
+    /* ── Spinner ─────────────────────────────── */
+    .spinner {
+      width: 16px; height: 16px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Login Page ──────────────────────────── */
+    #login-page {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .login-box { width: 380px; }
+    .login-box h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    .login-box p { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+    .login-tabs { display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .login-tab { flex: 1; padding: 9px; text-align: center; cursor: pointer; font-size: 13px; background: transparent; color: var(--muted); border: none; }
+    .login-tab.active { background: var(--accent); color: #0d1117; font-weight: 600; }
+
+    /* ── App Shell ───────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Top bar */
+    .topbar {
+      height: 48px; background: #161b22; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px; gap: 12px;
+      flex-shrink: 0; z-index: 20;
+    }
+    .topbar-brand {
+      font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap;
+      flex: 1;
+    }
+    .topbar-brand strong { color: var(--accent); }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+    .topbar-btn {
+      display: flex; align-items: center; gap: 6px; padding: 5px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .topbar-btn:hover { color: var(--text); border-color: var(--accent); }
+    .hamburger-btn {
+      width: 32px; height: 32px; display: flex; flex-direction: column;
+      justify-content: center; gap: 5px; cursor: pointer; padding: 4px; flex-shrink: 0;
+    }
+    .hamburger-btn span {
+      display: block; height: 2px; background: var(--muted); border-radius: 2px;
+      transition: background .15s;
+    }
+    .hamburger-btn:hover span { background: var(--text); }
+
+    /* App body */
+    .app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 200px; background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; flex-shrink: 0;
+      transition: width .2s ease; overflow: hidden;
+    }
+    .sidebar.collapsed { width: 48px; }
+    .sidebar.collapsed .nav-label { display: none; }
+    .sidebar.collapsed .sidebar-section-label { display: none; }
+    .nav-section-label {
+      padding: 14px 16px 4px; font-size: 10px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: .8px;
+      white-space: nowrap; overflow: hidden;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+      cursor: pointer; color: var(--muted); font-size: 13px;
+      transition: background .15s, color .15s; white-space: nowrap;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
+    .nav-item svg { flex-shrink: 0; }
+    .sidebar-footer { margin-top: auto; padding: 10px 8px; border-top: 1px solid var(--border); }
+    .user-info { font-size: 11px; color: var(--muted); margin-bottom: 6px; word-break: break-all; padding: 0 6px; }
+
+    /* Main content */
+    .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .page-header {
+      padding: 18px 28px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; background: var(--bg); z-index: 10;
+    }
+    .page-header h2 { font-size: 20px; font-weight: 600; }
+    .page-content { padding: 24px 28px; }
+
+    /* NSO Home cards */
+    .home-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 860px; }
+    .home-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 22px 24px; cursor: pointer; display: flex; align-items: center;
+      justify-content: space-between; transition: border-color .2s, background .2s;
+      min-height: 80px;
+    }
+    .home-card:hover { border-color: var(--accent); background: #1a2030; }
+    .home-card-title { font-size: 16px; font-weight: 600; color: var(--text); }
+    .home-card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .home-card-icon { color: var(--muted); flex-shrink: 0; opacity: .6; }
+    .home-section-title { font-size: 15px; font-weight: 600; margin: 28px 0 14px; color: var(--text); }
+
+    /* ── Devices ─────────────────────────────── */
+    .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .device-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px; cursor: pointer; transition: border-color .2s;
+    }
+    .device-card:hover { border-color: var(--accent); }
+    .device-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .device-name { font-size: 15px; font-weight: 600; }
+    .device-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Modal ───────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px; width: 460px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal h3 { margin-bottom: 20px; font-size: 16px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── Analysis ────────────────────────────── */
+    .analysis-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .analysis-tab {
+      padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted);
+      transition: all .15s;
+    }
+    .analysis-tab.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+    .analysis-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+    .analysis-output {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px; min-height: 200px; max-height: 600px; overflow-y: auto;
+      white-space: pre-wrap; font-size: 13px; line-height: 1.7;
+    }
+
+    /* ── History ─────────────────────────────── */
+    .history-item {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color .2s;
+    }
+    .history-item:hover { border-color: var(--accent); }
+    .history-item-header { display: flex; justify-content: space-between; align-items: center; }
+
+    /* ── Toast ───────────────────────────────── */
+    #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      padding: 12px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
+      min-width: 250px; animation: slideIn .2s ease;
+    }
+    .toast-success { background: #1a3a1a; border: 1px solid var(--success); color: var(--success); }
+    .toast-error   { background: #3a1a1a; border: 1px solid var(--danger);  color: var(--danger);  }
+    .toast-info    { background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); }
+    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── Dashboard Stats ─────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Login Page ──────────────────────────────────── -->
+<div id="login-page">
+  <div class="login-box card">
+    <h1>Network AI Orchestrator</h1>
+    <p>AI-powered network management</p>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="setAuthTab('login')">Sign In</button>
+      <button class="login-tab" onclick="setAuthTab('register')">Register</button>
+    </div>
+
+    <div id="auth-error" class="hidden" style="color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
+
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@company.com" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••"
+             onkeydown="if(event.key==='Enter') authSubmit()" />
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" onclick="authSubmit()" id="auth-btn">
+      Sign In
+    </button>
+  </div>
+</div>
+
+<!-- ── App Shell ───────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="hamburger-btn" onclick="toggleSidebar()" title="Expand/Collapse Menu">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="topbar-brand">
+      <strong>Access4</strong> Network Orchestrator
+    </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" onclick="showPage('sync')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+        Commit Manager
+      </button>
+      <span style="font-size:12px;color:var(--muted);padding:0 4px;" id="topbar-user-email"></span>
+      <button class="topbar-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <nav style="padding: 6px 0;">
+        <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span class="nav-label">Home</span>
+        </div>
+        <div class="nav-item" data-page="devices" onclick="showPage('devices')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          <span class="nav-label">Devices</span>
+        </div>
+        <div class="nav-item" data-page="services" onclick="showPage('services')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span class="nav-label">Services</span>
+        </div>
+        <div class="nav-item" data-page="sync" onclick="showPage('sync')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span class="nav-label">Config Editor</span>
+        </div>
+        <div class="nav-item" data-page="ipam" onclick="showPage('ipam')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/><line x1="2" y1="15" x2="20" y2="15"/></svg>
+          <span class="nav-label">IPAM</span>
+        </div>
+        <div class="nav-item" data-page="lld" onclick="showPage('lld')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span class="nav-label">LLD Compliance</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-ghost" style="width:100%;font-size:11px;" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+
+      <!-- HOME -->
+      <div id="page-dashboard" class="hidden">
+        <div class="page-header">
+          <h2>Home</h2>
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="loadDashboard()">↻ Refresh</button>
+        </div>
+        <div class="page-content">
+          <div class="home-grid">
+            <div class="home-card" onclick="showPage('devices')">
+              <div>
+                <div class="home-card-title">Devices</div>
+                <div class="home-card-sub" id="stat-devices-sub">Loading…</div>
+              </div>
+              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            </div>
+            <div class="home-card" onclick="showPage('services')">
+              <div>
+                <div class="home-card-title">Services</div>
+                <div class="home-card-sub">Manage network services</div>
+              </div>
+              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </div>
+            <div class="home-card" onclick="showPage('sync')">
+              <div>
+                <div class="home-card-title">Config Editor</div>
+                <div class="home-card-sub">Fetch, compare &amp; push device configs</div>
+              </div>
+              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div class="home-card" onclick="showPage('sync')">
+              <div>
+                <div class="home-card-title">Commit Manager</div>
+                <div class="home-card-sub">Review &amp; apply pending changes</div>
+              </div>
+              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+            </div>
+          </div>
+
+          <div class="home-section-title">Recent Devices</div>
+          <div class="device-grid" id="dashboard-devices">
+            <div class="text-muted text-sm">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEVICES -->
+      <div id="page-devices" class="hidden">
+        <div class="page-header">
+          <h2>Devices</h2>
+          <div class="flex gap-2 items-center">
+            <input id="device-search" type="text" placeholder="Filter…"
+              style="width:160px;padding:6px 10px;font-size:12px;"
+              oninput="filterDeviceTable(this.value)" />
+            <button class="btn btn-primary" onclick="openAddDeviceModal()">+ Add Device</button>
+          </div>
+        </div>
+        <div class="page-content" style="padding:0;overflow-x:auto;">
+          <div id="devices-grid">
+            <div class="text-muted text-sm" style="padding:20px;">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SERVICES -->
+      <div id="page-services" class="hidden">
+        <div class="page-header">
+          <h2>Services</h2>
+          <button class="btn btn-primary" onclick="openServiceModal()">+ New Service</button>
+        </div>
+        <div class="page-content">
+          <div id="services-list">
+            <div class="text-muted text-sm">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONFIG EDITOR -->
+      <div id="page-sync" class="hidden">
+        <div class="page-header">
+          <h2>Config Editor</h2>
+          <button class="btn btn-ghost" onclick="loadSync()">↻ Refresh</button>
+        </div>
+        <div class="page-content">
+          <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">
+            Fetch, compare, and push device running configs.
+          </p>
+          <div id="sync-table-wrap">
+            <div class="text-muted text-sm">Loading devices…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IPAM -->
+      <div id="page-ipam" class="hidden">
+        <div class="page-header">
+          <h2>IPAM</h2>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" style="font-size:12px;" onclick="loadIpam()">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="page-content">
+
+          <!-- Sub-tabs -->
+          <div class="analysis-tabs" style="margin-bottom:20px;">
+            <button class="analysis-tab active" id="ipam-tab-subnets"  onclick="ipamTab('subnets')">Subnets</button>
+            <button class="analysis-tab"         id="ipam-tab-addresses" onclick="ipamTab('addresses')">IP Addresses</button>
+            <button class="analysis-tab"         id="ipam-tab-vlans"   onclick="ipamTab('vlans')">VLANs</button>
+          </div>
+
+          <!-- ── Subnets pane ── -->
+          <div id="ipam-pane-subnets">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-subnet-count"></span>
+              <button class="btn btn-primary" onclick="openIpamModal('subnet')">+ Add Subnet</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;">Network</th>
+                    <th style="text-align:left;padding:8px 12px;">VRF</th>
+                    <th style="text-align:left;padding:8px 12px;">Site</th>
+                    <th style="text-align:left;padding:8px 12px;">VLAN</th>
+                    <th style="text-align:left;padding:8px 12px;">Utilization</th>
+                    <th style="text-align:left;padding:8px 12px;">Description</th>
+                    <th style="padding:8px 12px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ipam-subnet-tbody">
+                  <tr><td colspan="7" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── Addresses pane ── -->
+          <div id="ipam-pane-addresses" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <div class="flex gap-2 items-center">
+                <select id="ipam-addr-subnet-filter" style="width:220px;font-size:12px;" onchange="loadIpamAddresses()">
+                  <option value="">All Subnets</option>
+                </select>
+                <select id="ipam-addr-status-filter" style="width:140px;font-size:12px;" onchange="loadIpamAddresses()">
+                  <option value="">All Statuses</option>
+                  <option value="available">Available</option>
+                  <option value="in-use">In Use</option>
+                  <option value="reserved">Reserved</option>
+                  <option value="dhcp">DHCP</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="openIpamModal('address')">+ Allocate IP</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;">IP Address</th>
+                    <th style="text-align:left;padding:8px 12px;">Subnet</th>
+                    <th style="text-align:left;padding:8px 12px;">Status</th>
+                    <th style="text-align:left;padding:8px 12px;">Hostname</th>
+                    <th style="text-align:left;padding:8px 12px;">Description</th>
+                    <th style="padding:8px 12px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ipam-addr-tbody">
+                  <tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Select a subnet or load all.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── VLANs pane ── -->
+          <div id="ipam-pane-vlans" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-vlan-count"></span>
+              <button class="btn btn-primary" onclick="openIpamModal('vlan')">+ Add VLAN</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;">VLAN ID</th>
+                    <th style="text-align:left;padding:8px 12px;">Name</th>
+                    <th style="text-align:left;padding:8px 12px;">Site</th>
+                    <th style="text-align:left;padding:8px 12px;">Description</th>
+                    <th style="padding:8px 12px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ipam-vlan-tbody">
+                  <tr><td colspan="5" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- LLD Compliance Page                           -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="page-lld" class="hidden">
+        <div class="page-header">
+          <h2>LLD Compliance</h2>
+          <button class="btn btn-primary" onclick="openLldModal()">+ New Template</button>
+        </div>
+        <div class="page-content">
+
+          <!-- Template list -->
+          <div id="lld-templates-section">
+            <div class="text-muted text-sm" style="margin-bottom:14px;" id="lld-template-count">Loading…</div>
+            <div id="lld-template-list" style="display:grid;gap:12px;"></div>
+          </div>
+
+          <!-- Compliance report -->
+          <div id="lld-report-section" class="hidden" style="margin-top:24px;">
+            <div class="flex justify-between items-center" style="margin-bottom:16px;">
+              <h3 id="lld-report-title" style="font-size:15px;"></h3>
+              <button class="btn btn-ghost" style="font-size:12px;" onclick="closeLldReport()">✕ Close Report</button>
+            </div>
+
+            <!-- Score card -->
+            <div class="card" style="margin-bottom:16px;display:flex;gap:32px;align-items:center;">
+              <div style="text-align:center;">
+                <div id="lld-score-pct" style="font-size:36px;font-weight:700;color:var(--accent);"></div>
+                <div class="text-muted text-sm">Compliance Score</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex:1;">
+                <div class="card" style="text-align:center;padding:12px;">
+                  <div id="lld-score-passed" style="font-size:22px;font-weight:600;color:var(--success);"></div>
+                  <div class="text-muted text-sm">Passed</div>
+                </div>
+                <div class="card" style="text-align:center;padding:12px;">
+                  <div id="lld-score-failed" style="font-size:22px;font-weight:600;color:var(--danger);"></div>
+                  <div class="text-muted text-sm">Failed</div>
+                </div>
+                <div class="card" style="text-align:center;padding:12px;">
+                  <div id="lld-score-total" style="font-size:22px;font-weight:600;color:var(--text);"></div>
+                  <div class="text-muted text-sm">Total Checks</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results table -->
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;width:80px;">Status</th>
+                    <th style="text-align:left;padding:8px 12px;">Check</th>
+                    <th style="text-align:left;padding:8px 12px;">Type</th>
+                    <th style="text-align:left;padding:8px 12px;">Detail</th>
+                  </tr>
+                </thead>
+                <tbody id="lld-results-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+<!-- ── Config Viewer / Editor Modal ─────────────── -->
+<div id="config-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:820px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:14px;">
+      <h3 id="config-modal-title">Running Config</h3>
+      <div class="flex gap-2">
+        <button id="config-btn-copy"  class="btn btn-ghost"    style="font-size:12px;" onclick="copyConfigModal()">Copy</button>
+        <button id="config-btn-edit"  class="btn btn-ghost"    style="font-size:12px;" onclick="startEditConfig()">✏ Edit</button>
+        <button id="config-btn-apply" class="btn btn-primary hidden" style="font-size:12px;" onclick="applyConfig()">▶ Apply to Device</button>
+        <button id="config-btn-cancel" class="btn btn-ghost hidden"  style="font-size:12px;" onclick="cancelEditConfig()">Cancel</button>
+        <button class="btn btn-ghost" style="font-size:12px;" onclick="closeConfigModal()">✕</button>
+      </div>
+    </div>
+    <div id="config-modal-info" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+    <!-- Read-only view -->
+    <pre id="config-modal-pre" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:62vh;font-size:12px;line-height:1.6;white-space:pre;"></pre>
+    <!-- Edit mode textarea (hidden by default) -->
+    <textarea id="config-modal-editor" class="hidden"
+      style="width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:14px;
+             color:var(--text);font-family:monospace;font-size:12px;line-height:1.6;resize:vertical;
+             min-height:400px;max-height:62vh;box-sizing:border-box;outline:none;"></textarea>
+    <!-- Preview panel — shown before confirming apply -->
+    <div id="config-preview-panel" class="hidden"
+         style="margin-top:12px;border:1px solid #f0883e;border-radius:6px;padding:12px;background:#1a1008;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:#f0883e;">⚠ Preview Changes</span>
+        <span id="config-preview-summary" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <pre id="config-preview-pre"
+           style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;
+                  font-size:11px;max-height:220px;overflow:auto;white-space:pre;margin:0 0 10px;"></pre>
+      <div style="display:flex;gap:8px;">
+        <button id="config-preview-confirm" class="btn btn-primary" style="font-size:12px;">
+          ✓ Confirm &amp; Apply
+        </button>
+        <button id="config-preview-cancel" class="btn btn-ghost" style="font-size:12px;">
+          Cancel
+        </button>
+      </div>
+    </div>
+    <!-- Apply output -->
+    <div id="config-apply-output" class="hidden" style="margin-top:12px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Device output:</div>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;
+                  font-size:11px;max-height:180px;overflow:auto;white-space:pre;" id="config-apply-pre"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diff Viewer Modal ──────────────────────────── -->
+<div id="diff-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:820px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:14px;">
+      <h3 id="diff-modal-title">Check Sync — Diff</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeDiffModal()">✕</button>
+    </div>
+    <div id="diff-modal-status" style="margin-bottom:12px;"></div>
+    <pre id="diff-modal-body" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:60vh;font-size:12px;line-height:1.6;white-space:pre;"></pre>
+  </div>
+</div>
+
+<!-- ── Device Modal ──────────────────────────────── -->
+<div id="device-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="device-modal-title">Add Device</h3>
+    <input type="hidden" id="device-modal-id" value="" />
+
+    <div class="form-group">
+      <label>Device Name</label>
+      <input type="text" id="dm-name" placeholder="Core-Router-01" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 80px;gap:12px;">
+      <div class="form-group">
+        <label>Host / IP</label>
+        <input type="text" id="dm-host" placeholder="192.168.1.1" />
+      </div>
+      <div class="form-group">
+        <label>Port</label>
+        <input type="number" id="dm-port" value="22" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>SSH Username</label>
+      <input type="text" id="dm-username" placeholder="admin" />
+    </div>
+    <div class="form-group">
+      <label>SSH Password</label>
+      <input type="password" id="dm-password" placeholder="••••••••" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label>Device Type</label>
+        <select id="dm-device-type">
+          <option value="cisco_ios">Cisco IOS</option>
+          <option value="cisco_nxos">Cisco NX-OS</option>
+          <option value="cisco_xr">Cisco IOS-XR</option>
+          <option value="arista_eos">Arista EOS</option>
+          <option value="juniper_junos">Juniper JunOS</option>
+          <option value="fortinet">Fortinet FortiGate</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Site / Location</label>
+        <input type="text" id="dm-site" placeholder="HQ, Branch-1..." />
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeviceModal()">Cancel</button>
+      <button class="btn btn-ghost" onclick="testDeviceModal()" id="dm-test-btn" style="display:none">
+        Test Connection
+      </button>
+      <button class="btn btn-primary" onclick="saveDevice()" id="dm-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Backups Modal ─────────────────────────────── -->
+<div id="backups-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeBackupsModal()">
+  <div class="modal" style="max-width:700px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:14px;">
+      <h3 id="backups-modal-title">Backups</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeBackupsModal()">✕</button>
+    </div>
+    <div id="backups-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+
+<!-- ── Service Create / Edit Modal ───────────────── -->
+<div id="svc-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSvcModal()">
+  <div class="modal" style="max-width:660px;width:95vw;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 id="svc-modal-title" style="font-size:15px;">New Service</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeSvcModal()">✕</button>
+    </div>
+
+    <!-- Name + Description inline -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div class="form-group" style="margin:0;">
+        <label>Name</label>
+        <input type="text" id="svc-name" placeholder="e.g. Create Loopback" />
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Description</label>
+        <input type="text" id="svc-desc" placeholder="What does this do?" />
+      </div>
+    </div>
+
+    <!-- Editor tabs -->
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <!-- Tab bar -->
+      <div style="display:flex;background:var(--surface);border-bottom:1px solid var(--border);">
+        <button id="svc-tab-vars" onclick="svcSwitchTab('vars')"
+          style="padding:8px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;
+                 background:var(--bg);color:var(--text);border-right:1px solid var(--border);
+                 border-bottom:2px solid var(--accent);">
+          Variables
+        </button>
+        <button id="svc-tab-tpl" onclick="svcSwitchTab('tpl')"
+          style="padding:8px 18px;font-size:12px;font-weight:600;border:none;cursor:pointer;
+                 background:var(--surface);color:var(--muted);border-bottom:2px solid transparent;">
+          Template
+        </button>
+        <div style="flex:1;"></div>
+        <button id="svc-insert-btn" onclick="svcInsertExample(event)"
+          style="padding:8px 14px;font-size:11px;border:none;cursor:pointer;
+                 background:transparent;color:var(--accent);">
+          Insert example
+        </button>
+      </div>
+
+      <!-- Variables panel -->
+      <div id="svc-panel-vars">
+        <textarea id="svc-schema" rows="16"
+          style="width:100%;background:var(--bg);border:none;outline:none;resize:none;
+                 font-family:monospace;font-size:12px;line-height:1.6;color:var(--text);
+                 padding:14px;box-sizing:border-box;"
+          placeholder="interface_name:Loopback0&#10;ip_address:1.1.1.1&#10;subnet_mask:255.255.255.255&#10;description:Managed by Access4"></textarea>
+        <div style="padding:6px 14px;font-size:10px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border);">
+          Format: <code style="color:var(--accent)">variable_name:default_value</code> — one per line
+        </div>
+      </div>
+
+      <!-- Template panel (hidden by default) -->
+      <div id="svc-panel-tpl" class="hidden">
+        <textarea id="svc-template" rows="16"
+          style="width:100%;background:var(--bg);border:none;outline:none;resize:none;
+                 font-family:monospace;font-size:12px;line-height:1.6;color:var(--text);
+                 padding:14px;box-sizing:border-box;"
+          placeholder="interface {{ interface_name }}&#10; description {{ description }}&#10; ip address {{ ip_address }} {{ subnet_mask }}&#10; no shutdown"></textarea>
+        <div style="padding:6px 14px;font-size:10px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border);">
+          Use <code style="color:var(--accent)">{{ variable_name }}</code> for substitution
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSvcModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSvcTemplate()">Save Service</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Service Deploy Modal ───────────────────────── -->
+<div id="svc-deploy-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSvcDeployModal()">
+  <div class="modal" style="max-width:580px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:16px;">
+      <h3 id="svc-deploy-title">Deploy Service</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="closeSvcDeployModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Target Device</label>
+      <select id="svc-deploy-device"></select>
+    </div>
+
+    <div id="svc-deploy-vars" style="margin-bottom:14px;"></div>
+
+    <!-- Preview panel -->
+    <div id="svc-preview-panel" class="hidden"
+         style="margin-bottom:14px;border:1px solid var(--border);border-radius:6px;padding:12px;background:var(--bg);">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Preview — commands to be sent:</div>
+      <pre id="svc-preview-pre" style="font-size:11px;line-height:1.6;white-space:pre;overflow:auto;max-height:200px;margin:0;"></pre>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSvcDeployModal()">Cancel</button>
+      <button class="btn btn-ghost" onclick="previewService()">👁 Preview</button>
+      <button class="btn btn-primary" onclick="deployService()" id="svc-deploy-btn">▶ Deploy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IPAM: Add/Edit Subnet Modal ───────────────── -->
+<div id="ipam-subnet-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:480px;">
+    <h3 id="ipam-subnet-modal-title">Add Subnet</h3>
+    <input type="hidden" id="ipam-modal-subnet-id" value="" />
+    <div class="form-group">
+      <label>Network (CIDR) *</label>
+      <input id="ipam-modal-subnet-network" placeholder="e.g. 192.168.1.0/24" />
+    </div>
+    <div class="form-group">
+      <label>VRF</label>
+      <input id="ipam-modal-subnet-vrf" placeholder="global" />
+    </div>
+    <div class="form-group">
+      <label>Site</label>
+      <input id="ipam-modal-subnet-site" placeholder="e.g. DC1" />
+    </div>
+    <div class="form-group">
+      <label>VLAN</label>
+      <select id="ipam-modal-subnet-vlan">
+        <option value="">— None —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="ipam-modal-subnet-desc" placeholder="Optional" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('ipam-subnet-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" id="ipam-subnet-submit-btn" onclick="submitIpamSubnet()">Create Subnet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IPAM: Allocate IP Modal ───────────────────── -->
+<div id="ipam-addr-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:480px;">
+    <h3>Allocate IP Address</h3>
+    <div class="form-group">
+      <label>Subnet *</label>
+      <select id="ipam-modal-addr-subnet"></select>
+    </div>
+    <div class="form-group">
+      <label>IP Address *</label>
+      <input id="ipam-modal-addr-ip" placeholder="e.g. 192.168.1.10" />
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="ipam-modal-addr-status">
+        <option value="in-use">In Use</option>
+        <option value="reserved">Reserved</option>
+        <option value="available">Available</option>
+        <option value="dhcp">DHCP</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Hostname</label>
+      <input id="ipam-modal-addr-hostname" placeholder="e.g. router-core-01" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="ipam-modal-addr-desc" placeholder="Optional" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('ipam-addr-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitIpamAddress()">Allocate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IPAM: Edit IP Modal ───────────────────────── -->
+<div id="ipam-addr-edit-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:420px;">
+    <h3>Edit IP Address</h3>
+    <input type="hidden" id="ipam-edit-addr-id" />
+    <div class="form-group">
+      <label>Status</label>
+      <select id="ipam-edit-addr-status">
+        <option value="available">Available</option>
+        <option value="in-use">In Use</option>
+        <option value="reserved">Reserved</option>
+        <option value="dhcp">DHCP</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Hostname</label>
+      <input id="ipam-edit-addr-hostname" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="ipam-edit-addr-description" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('ipam-addr-edit-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveIpamAddressEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IPAM: Add VLAN Modal ──────────────────────── -->
+<div id="ipam-vlan-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:420px;">
+    <h3>Add VLAN</h3>
+    <div class="form-group">
+      <label>VLAN ID (1–4094) *</label>
+      <input id="ipam-modal-vlan-id" type="number" min="1" max="4094" placeholder="e.g. 100" />
+    </div>
+    <div class="form-group">
+      <label>Name *</label>
+      <input id="ipam-modal-vlan-name" placeholder="e.g. Management" />
+    </div>
+    <div class="form-group">
+      <label>Site</label>
+      <input id="ipam-modal-vlan-site" placeholder="e.g. DC1" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="ipam-modal-vlan-desc" placeholder="Optional" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('ipam-vlan-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitIpamVlan()">Create VLAN</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ───────────────────────────── -->
+<div id="toast-container"></div>
+
+<script>
+// ════════════════════════════════════════════════
+// Toast notifications
+// ════════════════════════════════════════════════
+function showToast(message, type = 'info') {
+  const colors = { success: '#3fb950', error: '#f85149', info: '#58a6ff', warning: '#d29922' };
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position:fixed; bottom:24px; right:24px; z-index:9999;
+    background:#161b22; border:1px solid #30363d; border-left:3px solid ${colors[type] || colors.info};
+    color:#c9d1d9; padding:12px 18px; border-radius:8px; font-size:13px;
+    box-shadow:0 4px 12px rgba(0,0,0,.4); max-width:360px;
+    animation:fadeIn .2s ease;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════
+const API = '';   // Same origin — FastAPI serves the frontend
+let token = localStorage.getItem('nai_token') || '';
+let currentPage = 'dashboard';
+let devices = [];
+
+// ════════════════════════════════════════════════
+// Auth
+// ════════════════════════════════════════════════
+let authMode = 'login';
+
+function setAuthTab(mode) {
+  authMode = mode;
+  document.querySelectorAll('.login-tab').forEach((t, i) => {
+    t.classList.toggle('active', (mode === 'login' && i === 0) || (mode === 'register' && i === 1));
+  });
+  document.getElementById('auth-btn').textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('auth-error').classList.add('hidden');
+}
+
+async function authSubmit() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.classList.add('hidden');
+
+  if (!email || !pass) { errEl.textContent = 'Email and password required.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('auth-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    if (authMode === 'register') {
+      const r = await api('POST', '/api/auth/register', { email, password: pass });
+      toast('Account created — sign in now', 'success');
+      setAuthTab('login');
+      btn.disabled = false; btn.textContent = 'Sign In';
+      return;
+    }
+
+    // Login via OAuth2 form
+    const form = new URLSearchParams({ username: email, password: pass });
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Login failed');
+    }
+    const data = await res.json();
+    token = data.access_token;
+    localStorage.setItem('nai_token', token);
+    initApp();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
+  }
+}
+
+function logout() {
+  token = '';
+  localStorage.removeItem('nai_token');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-page').classList.remove('hidden');
+}
+
+// ════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════
+async function initApp() {
+  try {
+    const me = await api('GET', '/api/auth/me');
+    document.getElementById('topbar-user-email').textContent = me.email;
+    document.getElementById('login-page').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    showPage('dashboard');
+  } catch(e) {
+    token = ''; localStorage.removeItem('nai_token');
+  }
+}
+
+// ════════════════════════════════════════════════
+// Navigation
+// ════════════════════════════════════════════════
+function showPage(page) {
+  currentPage = page;
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+  const pageEl = document.getElementById(`page-${page}`);
+  if (pageEl) pageEl.classList.remove('hidden');
+
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'devices')   loadDevices();
+  if (page === 'services')  loadServices();
+  if (page === 'sync')      loadSync();
+  if (page === 'ipam')      loadIpam();
+  if (page === 'lld')       loadLldTemplates();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+// ════════════════════════════════════════════════
+// Dashboard
+// ════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const devs = await api('GET', '/api/devices');
+    devices = devs;
+    const sub = document.getElementById('stat-devices-sub');
+    if (sub) sub.textContent = `${devs.length} device${devs.length !== 1 ? 's' : ''} managed`;
+
+    const grid = document.getElementById('dashboard-devices');
+    if (devs.length === 0) {
+      grid.innerHTML = '<div class="text-muted text-sm">No devices yet — add one in Devices.</div>';
+    } else {
+      grid.innerHTML = devs.slice(0, 6).map(d => renderDeviceCard(d)).join('');
+    }
+  } catch(e) { toast('Failed to load dashboard', 'error'); }
+}
+
+// ════════════════════════════════════════════════
+// Devices
+// ════════════════════════════════════════════════
+async function loadDevices() {
+  const wrap = document.getElementById('devices-grid');
+  wrap.innerHTML = '<div class="text-muted text-sm" style="padding:20px;">Loading...</div>';
+  try {
+    devices = await api('GET', '/api/devices');
+    renderDeviceTable(devices);
+  } catch(e) { toast('Failed to load devices', 'error'); }
+}
+
+function filterDeviceTable(q) {
+  const filtered = devices.filter(d =>
+    d.name.toLowerCase().includes(q.toLowerCase()) ||
+    d.host.toLowerCase().includes(q.toLowerCase()) ||
+    (d.site||'').toLowerCase().includes(q.toLowerCase())
+  );
+  renderDeviceTable(filtered);
+}
+
+const _THEAD = `<thead>
+  <tr style="background:var(--surface);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:1;">
+    <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;white-space:nowrap;">Name</th>
+    <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Address</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Port</th>
+    <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Type</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Status</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Ping</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Connect</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Check&#8209;Sync</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Sync&#8209;From</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Sync&#8209;To</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Configuration</th>
+    <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Manage</th>
+  </tr>
+</thead>`;
+
+function renderDeviceTable(devs) {
+  const wrap = document.getElementById('devices-grid');
+  if (!devs.length) {
+    wrap.innerHTML = '<div class="text-muted text-sm" style="padding:20px;">No devices — click "+ Add Device" to get started.</div>';
+    return;
+  }
+
+  // Group devices
+  const grouped = {};
+  const ungrouped = [];
+  devs.forEach(d => {
+    if (d.group_id) {
+      if (!grouped[d.group_id]) grouped[d.group_id] = [];
+      grouped[d.group_id].push(d);
+    } else {
+      ungrouped.push(d);
+    }
+  });
+
+  let rows = '';
+  Object.entries(grouped).forEach(([gid, gdevs]) => {
+    const group = deviceGroups.find(g => g.id == gid);
+    const gname = group ? group.name : `Group ${gid}`;
+    rows += `<tr>
+      <td colspan="13" style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);border-top:2px solid var(--accent-dim);">
+        <span style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;">📁 ${escHtml(gname)}</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px;">${gdevs.length} device${gdevs.length !== 1 ? 's' : ''}</span>
+      </td></tr>`;
+    rows += gdevs.map(d => renderDeviceRow(d)).join('');
+  });
+  if (ungrouped.length) {
+    if (Object.keys(grouped).length) {
+      rows += `<tr><td colspan="13" style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);border-top:2px solid var(--border);">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Ungrouped</span>
+      </td></tr>`;
+    }
+    rows += ungrouped.map(d => renderDeviceRow(d)).join('');
+  }
+
+  wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:960px;">${_THEAD}<tbody>${rows}</tbody></table>`;
+}
+
+function _actionBtn(label, onclick, style='') {
+  return `<button class="nso-btn" style="${style}" onclick="${onclick}">${label}</button>`;
+}
+
+function renderDeviceRow(d) {
+  return `
+    <tr id="device-row-${d.id}" style="border-bottom:1px solid var(--border);" class="device-table-row">
+      <td style="padding:10px 14px;font-weight:600;color:var(--text);white-space:nowrap;">${escHtml(d.name)}</td>
+      <td style="padding:10px 14px;color:var(--muted);font-family:monospace;">${escHtml(d.host)}</td>
+      <td style="padding:10px 6px;text-align:center;color:var(--muted);">${d.port}</td>
+      <td style="padding:10px 14px;white-space:nowrap;">
+        <span style="font-size:10px;padding:2px 7px;border-radius:3px;background:#1a2535;color:var(--accent);border:1px solid var(--accent-dim);">
+          ${escHtml(d.device_type)}
+        </span>
+      </td>
+      <td style="padding:10px 6px;text-align:center;" id="device-sync-status-${d.id}">
+        <span style="font-size:10px;color:var(--muted);">—</span>
+      </td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('ping',       `testDevice(${d.id},this)`)}</td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('connect',    `testDevice(${d.id},this)`)}</td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('check-sync', `doCheckSync(${d.id},this)`)}</td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('sync-from',  `doFetchConfig(${d.id},this)`)}</td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('sync-to',    `doSync(${d.id},this)`)}</td>
+      <td style="padding:6px 4px;text-align:center;">${_actionBtn('view / edit',`doShowConfig(${d.id})`)}</td>
+      <td style="padding:6px 4px;text-align:center;">
+        <div class="flex gap-1" style="justify-content:center;">
+          ${_actionBtn('edit', `openEditDeviceModal(${d.id})`, 'background:transparent;color:var(--muted);border-color:var(--border);')}
+          ${_actionBtn('del',  `deleteDevice(${d.id})`,        'background:transparent;color:var(--danger);border-color:var(--danger);')}
+        </div>
+      </td>
+    </tr>`;
+}
+
+// ── Selection & Bulk Backup ──────────────────────────────────────
+
+function getSelectedIds() {
+  return [...document.querySelectorAll('.device-cb:checked')].map(cb => parseInt(cb.dataset.id));
+}
+
+// Keep renderDeviceCard for dashboard (mini cards, no actions)
+function renderDeviceCard(d) {
+  const lastSeen = d.last_seen
+    ? new Date(d.last_seen + 'Z').toLocaleString()
+    : 'Never connected';
+  return `
+    <div class="device-card" onclick="showPage('devices')">
+      <div class="device-card-header">
+        <div>
+          <div class="device-name">${escHtml(d.name)}</div>
+          <div class="device-meta">${escHtml(d.host)}:${d.port}</div>
+        </div>
+        <span class="badge badge-accent">${escHtml(d.device_type.replace('_',' ').toUpperCase())}</span>
+      </div>
+      <div class="device-meta">${d.site ? '📍 '+escHtml(d.site)+'  ·  ' : ''}${lastSeen}</div>
+    </div>`;
+}
+
+async function testDevice(deviceId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/test`);
+    if (r.success) {
+      toast(`✅ Connected: ${r.message}`, 'success');
+    } else {
+      toast(`❌ ${r.message}`, 'error');
+    }
+  } catch(e) { toast('Test failed', 'error'); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+async function deleteDevice(id) {
+  if (!confirm('Delete this device? This also deletes all its analysis history.')) return;
+  try {
+    await api('DELETE', `/api/devices/${id}`);
+    toast('Device deleted', 'success');
+    loadDevices();
+  } catch(e) { toast('Delete failed', 'error'); }
+}
+
+// Device Modal
+function openAddDeviceModal() {
+  document.getElementById('device-modal-title').textContent = 'Add Device';
+  document.getElementById('device-modal-id').value = '';
+  ['dm-name','dm-host','dm-username','dm-password','dm-site'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('dm-port').value = '22';
+  document.getElementById('dm-device-type').value = 'cisco_ios';
+  document.getElementById('dm-test-btn').style.display = 'none';
+  document.getElementById('dm-save-btn').textContent = 'Add Device';
+  document.getElementById('device-modal').classList.remove('hidden');
+}
+
+function openEditDeviceModal(deviceId) {
+  const d = devices.find(x => x.id === deviceId);
+  if (!d) return;
+  document.getElementById('device-modal-title').textContent = 'Edit Device';
+  document.getElementById('device-modal-id').value = d.id;
+  document.getElementById('dm-name').value = d.name;
+  document.getElementById('dm-host').value = d.host;
+  document.getElementById('dm-port').value = d.port;
+  document.getElementById('dm-username').value = d.username;
+  document.getElementById('dm-password').value = '';
+  document.getElementById('dm-device-type').value = d.device_type;
+  document.getElementById('dm-site').value = d.site || '';
+  document.getElementById('dm-test-btn').style.display = 'inline-flex';
+  document.getElementById('dm-save-btn').textContent = 'Save Changes';
+  document.getElementById('device-modal').classList.remove('hidden');
+}
+
+function closeDeviceModal() {
+  document.getElementById('device-modal').classList.add('hidden');
+}
+
+async function testDeviceModal() {
+  const id = document.getElementById('device-modal-id').value;
+  if (!id) return;
+  const btn = document.getElementById('dm-test-btn');
+  btn.disabled = true; btn.textContent = 'Testing...';
+  try {
+    const r = await api('POST', `/api/devices/${id}/test`);
+    toast(r.success ? `✅ ${r.message}` : `❌ ${r.message}`, r.success ? 'success' : 'error');
+  } catch(e) { toast('Test failed', 'error'); }
+  btn.disabled = false; btn.textContent = 'Test Connection';
+}
+
+async function saveDevice() {
+  const id = document.getElementById('device-modal-id').value;
+  const payload = {
+    name:        document.getElementById('dm-name').value.trim(),
+    host:        document.getElementById('dm-host').value.trim(),
+    port:        parseInt(document.getElementById('dm-port').value) || 22,
+    username:    document.getElementById('dm-username').value.trim(),
+    password:    document.getElementById('dm-password').value,
+    device_type: document.getElementById('dm-device-type').value,
+    site:        document.getElementById('dm-site').value.trim(),
+  };
+
+  if (!payload.name || !payload.host || !payload.username) {
+    toast('Name, host, and username are required', 'error'); return;
+  }
+  if (!id && !payload.password) {
+    toast('Password required for new devices', 'error'); return;
+  }
+
+  const btn = document.getElementById('dm-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    if (id) {
+      if (!payload.password) delete payload.password;
+      await api('PUT', `/api/devices/${id}`, payload);
+      toast('Device updated', 'success');
+    } else {
+      await api('POST', '/api/devices', payload);
+      toast('Device added', 'success');
+    }
+    closeDeviceModal();
+    loadDevices();
+  } catch(e) { toast(e.message || 'Save failed', 'error'); }
+  btn.disabled = false;
+  btn.textContent = id ? 'Save Changes' : 'Add Device';
+}
+
+
+
+// ════════════════════════════════════════════════
+// Services
+// ════════════════════════════════════════════════
+
+let _svcEditId   = null;  // template id being edited (null = new)
+let _svcDeployId = null;  // template id being deployed
+
+async function loadServices() {
+  const list = document.getElementById('services-list');
+  list.innerHTML = '<div class="text-muted text-sm">Loading…</div>';
+  try {
+    const svcs = await api('GET', '/api/services');
+    renderServicesList(svcs);
+  } catch(e) {
+    list.innerHTML = `<div class="text-muted text-sm">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderServicesList(svcs) {
+  const list = document.getElementById('services-list');
+  if (!svcs.length) {
+    list.innerHTML = '<div class="text-muted text-sm">No services yet — click <strong>+ New Service</strong> to create one.</div>';
+    return;
+  }
+  list.innerHTML = svcs.map(s => `
+    <div class="device-card" style="margin-bottom:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:14px;">${escHtml(s.name)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${escHtml(s.description || 'No description')}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Updated ${new Date(s.updated_at).toLocaleDateString()}</div>
+      </div>
+      <div class="device-card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openDeployModal(${s.id})">▶ Deploy</button>
+        <button class="btn btn-ghost btn-sm"   onclick="openServiceModal(${s.id})">✏ Edit</button>
+        <button class="btn btn-ghost btn-sm"   style="color:#e05252;" onclick="deleteSvcTemplate(${s.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function openServiceModal(id = null) {
+  _svcEditId = id;
+  document.getElementById('svc-modal-title').textContent = id ? 'Edit Service' : 'New Service';
+  document.getElementById('svc-name').value     = '';
+  document.getElementById('svc-desc').value     = '';
+  document.getElementById('svc-schema').value   = '';
+  document.getElementById('svc-template').value = '';
+
+  if (id) {
+    try {
+      const svc = await api('GET', `/api/services/${id}`);
+      document.getElementById('svc-name').value     = svc.name;
+      document.getElementById('svc-desc').value     = svc.description;
+      document.getElementById('svc-schema').value   = svc.variables_schema;
+      document.getElementById('svc-template').value = svc.template_body;
+    } catch(e) { toast('Failed to load service', 'error'); return; }
+  }
+  svcSwitchTab('vars');
+  document.getElementById('svc-modal').classList.remove('hidden');
+}
+
+function closeSvcModal() {
+  document.getElementById('svc-modal').classList.add('hidden');
+  _svcEditId = null;
+}
+
+async function saveSvcTemplate() {
+  const payload = {
+    name:             document.getElementById('svc-name').value.trim(),
+    description:      document.getElementById('svc-desc').value.trim(),
+    variables_schema: document.getElementById('svc-schema').value,
+    template_body:    document.getElementById('svc-template').value,
+  };
+  if (!payload.name) { toast('Service name is required', 'error'); return; }
+
+  const btn = document.querySelector('#svc-modal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    if (_svcEditId) {
+      await api('PUT', `/api/services/${_svcEditId}`, payload);
+      toast('Service updated', 'success');
+    } else {
+      await api('POST', '/api/services', payload);
+      toast('Service created', 'success');
+    }
+    closeSvcModal();
+    loadServices();
+  } catch(e) { toast(e.message || 'Save failed', 'error'); }
+  btn.disabled = false; btn.textContent = 'Save Service';
+}
+
+function svcSwitchTab(tab) {
+  const isVars = tab === 'vars';
+  document.getElementById('svc-panel-vars').classList.toggle('hidden', !isVars);
+  document.getElementById('svc-panel-tpl').classList.toggle('hidden', isVars);
+
+  const btnVars = document.getElementById('svc-tab-vars');
+  const btnTpl  = document.getElementById('svc-tab-tpl');
+  btnVars.style.background      = isVars ? 'var(--bg)'      : 'var(--surface)';
+  btnVars.style.color           = isVars ? 'var(--text)'    : 'var(--muted)';
+  btnVars.style.borderBottom    = isVars ? '2px solid var(--accent)' : '2px solid transparent';
+  btnTpl.style.background       = isVars ? 'var(--surface)' : 'var(--bg)';
+  btnTpl.style.color            = isVars ? 'var(--muted)'   : 'var(--text)';
+  btnTpl.style.borderBottom     = isVars ? '2px solid transparent' : '2px solid var(--accent)';
+}
+
+function svcInsertExample(e) {
+  e.preventDefault();
+  const onVars = !document.getElementById('svc-panel-vars').classList.contains('hidden');
+  if (onVars) {
+    document.getElementById('svc-schema').value =
+`interface_name:Loopback0
+ip_address:1.1.1.1
+subnet_mask:255.255.255.255
+description:Managed by Access4`;
+  } else {
+    document.getElementById('svc-template').value =
+`interface {{ interface_name }}
+ description {{ description }}
+ ip address {{ ip_address }} {{ subnet_mask }}
+ no shutdown`;
+  }
+}
+
+// keep old names as aliases (called from inline HTML if any remain)
+function insertSchemaExample(e)   { svcSwitchTab('vars'); svcInsertExample(e); }
+function insertTemplateExample(e) { svcSwitchTab('tpl');  svcInsertExample(e); }
+
+// ── Deploy Modal ──────────────────────────────────
+
+async function openDeployModal(svcId) {
+  _svcDeployId = svcId;
+  document.getElementById('svc-preview-panel').classList.add('hidden');
+  document.getElementById('svc-preview-pre').textContent = '';
+
+  try {
+    const [svc, devs] = await Promise.all([
+      api('GET', `/api/services/${svcId}`),
+      api('GET', '/api/devices'),
+    ]);
+
+    document.getElementById('svc-deploy-title').textContent = `Deploy: ${svc.name}`;
+
+    const sel = document.getElementById('svc-deploy-device');
+    if (!devs.length) {
+      sel.innerHTML = '<option value="">No devices — add one first</option>';
+    } else {
+      sel.innerHTML = devs.map(d =>
+        `<option value="${d.id}">${escHtml(d.name)} (${escHtml(d.host)})</option>`
+      ).join('');
+    }
+
+    buildVarForm(svc.variables_schema);
+    document.getElementById('svc-deploy-modal').classList.remove('hidden');
+  } catch(e) { toast(e.message || 'Failed to open deploy', 'error'); }
+}
+
+function buildVarForm(schemaYaml) {
+  // Simple format: one variable per line → "key:default_value"
+  // e.g.  interface_name:Loopback0
+  //       ip_address:1.1.1.1
+  const container = document.getElementById('svc-deploy-vars');
+  if (!schemaYaml || !schemaYaml.trim()) { container.innerHTML = ''; return; }
+
+  const entries = [];
+  for (const raw of schemaYaml.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const colon = line.indexOf(':');
+    if (colon === -1) continue;
+    const key    = line.slice(0, colon).trim();
+    const defVal = line.slice(colon + 1).trim();
+    if (key) entries.push([key, defVal]);
+  }
+
+  if (!entries.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = entries.map(([key, defVal]) => {
+    // Humanise key: underscores → spaces, title-case
+    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return `
+      <div class="form-group">
+        <label>${escHtml(label)}</label>
+        <input type="text" data-varkey="${escHtml(key)}"
+               value="${escHtml(defVal)}" placeholder="${escHtml(defVal)}" />
+      </div>`;
+  }).join('');
+}
+
+function closeSvcDeployModal() {
+  document.getElementById('svc-deploy-modal').classList.add('hidden');
+  _svcDeployId = null;
+}
+
+function _collectVarValues() {
+  const vars = {};
+  document.querySelectorAll('#svc-deploy-vars input[data-varkey]').forEach(inp => {
+    vars[inp.dataset.varkey] = inp.value;
+  });
+  return vars;
+}
+
+async function previewService() {
+  if (!_svcDeployId) return;
+  try {
+    const resp = await api('POST', `/api/services/${_svcDeployId}/preview`, {
+      variable_values: _collectVarValues(),
+    });
+    document.getElementById('svc-preview-pre').textContent = resp.rendered;
+    document.getElementById('svc-preview-panel').classList.remove('hidden');
+  } catch(e) { toast(e.message || 'Preview failed', 'error'); }
+}
+
+async function deployService() {
+  if (!_svcDeployId) return;
+  const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
+  if (!deviceId) { toast('Select a device', 'error'); return; }
+
+  const btn = document.getElementById('svc-deploy-btn');
+  btn.disabled = true; btn.textContent = 'Deploying…';
+
+  try {
+    const resp = await api('POST', `/api/services/${_svcDeployId}/deploy`, {
+      device_id:       deviceId,
+      variable_values: _collectVarValues(),
+    });
+    toast(`Deployed — ${resp.lines_sent} commands sent`, 'success');
+    closeSvcDeployModal();
+  } catch(e) { toast(e.message || 'Deploy failed', 'error'); }
+  btn.disabled = false; btn.textContent = '▶ Deploy';
+}
+
+async function deleteSvcTemplate(id) {
+  if (!confirm('Delete this service template? This cannot be undone.')) return;
+  try {
+    await api('DELETE', `/api/services/${id}`);
+    toast('Service deleted', 'success');
+    loadServices();
+  } catch(e) { toast(e.message || 'Delete failed', 'error'); }
+}
+
+
+// ════════════════════════════════════════════════
+// API Helper
+// ════════════════════════════════════════════════
+async function api(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) { logout(); throw new Error('Session expired'); }
+  if (res.status === 204) return null;
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+// ════════════════════════════════════════════════
+// Toast
+// ════════════════════════════════════════════════
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ════════════════════════════════════════════════
+// Utilities
+// ════════════════════════════════════════════════
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════════════
+// Sync (NSO-style)
+// ════════════════════════════════════════════════
+
+async function loadSync() {
+  const wrap = document.getElementById('sync-table-wrap');
+  wrap.innerHTML = '<div class="text-muted text-sm">Loading…</div>';
+  try {
+    const devs = await api('GET', '/api/devices');
+    if (!devs.length) {
+      wrap.innerHTML = '<div class="text-muted text-sm">No devices — add one in the Devices tab.</div>';
+      return;
+    }
+
+    // Fetch latest sync history for each device (best-effort)
+    const rows = await Promise.all(devs.map(async d => {
+      let lastSync = null;
+      try {
+        const h = await api('GET', `/api/devices/${d.id}/sync-history?limit=1`);
+        if (h.length) lastSync = h[0];
+      } catch(_) {}
+      return { device: d, lastSync };
+    }));
+
+    wrap.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);">
+            <th style="text-align:left;padding:8px 10px;">Device</th>
+            <th style="text-align:left;padding:8px 10px;">Host</th>
+            <th style="text-align:left;padding:8px 10px;">Last Action</th>
+            <th style="text-align:left;padding:8px 10px;">Status</th>
+            <th style="text-align:left;padding:8px 10px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sync-tbody">
+          ${rows.map(r => renderSyncRow(r.device, r.lastSync)).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) { toast('Failed to load sync view', 'error'); }
+}
+
+function _syncStatusBadge(status) {
+  const map = {
+    'synced':      'background:#0f3a1f;color:#3fb950',
+    'in-sync':     'background:#0f3a1f;color:#3fb950',
+    'out-of-sync': 'background:#3a1a0f;color:#f85149',
+    'error':       'background:#3a1a0f;color:#f85149',
+    'no-snapshot': 'background:#2a2208;color:#d29922',
+  };
+  const style = map[status] || 'background:var(--surface);color:var(--muted)';
+  return `<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;${style}">${(status||'—').toUpperCase()}</span>`;
+}
+
+function renderSyncRow(d, lastSync) {
+  const statusHtml = lastSync ? _syncStatusBadge(lastSync.status) : _syncStatusBadge('no-snapshot');
+  const lastTime   = lastSync ? new Date(lastSync.timestamp + 'Z').toLocaleString() : '—';
+  const action     = lastSync ? lastSync.action : '—';
+  return `
+    <tr id="sync-row-${d.id}" style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px;">${escHtml(d.name)}</td>
+      <td style="padding:10px;color:var(--muted);">${escHtml(d.host)}</td>
+      <td style="padding:10px;color:var(--muted);">${action}<br><span style="font-size:11px;">${lastTime}</span></td>
+      <td style="padding:10px;" id="sync-status-${d.id}">${statusHtml}</td>
+      <td style="padding:10px;">
+        <div class="flex gap-2" style="flex-wrap:wrap;">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="doFetchConfig(${d.id},this)">Fetch Config</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="doCheckSync(${d.id},this)">Check Sync</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:4px 9px;"
+            onclick="doSync(${d.id},this)">Sync</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="doShowConfig(${d.id})">View / Edit Config</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function _updateDeviceSyncBadge(deviceId, status) {
+  const colors = { synced:'#3fb950', 'in-sync':'#3fb950', 'out-of-sync':'#f85149', error:'#f85149', 'no-snapshot':'#d29922' };
+  const color  = colors[status] || 'var(--muted)';
+  const cell   = document.getElementById(`device-sync-status-${deviceId}`);
+  if (cell) cell.innerHTML = `<span style="font-size:10px;font-weight:700;color:${color};">${status.toUpperCase()}</span>`;
+  // also update sync table if open
+  const syncCell = document.getElementById(`sync-status-${deviceId}`);
+  if (syncCell) syncCell.innerHTML = _syncStatusBadge(status);
+}
+
+async function doFetchConfig(deviceId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const snap = await api('POST', `/api/devices/${deviceId}/fetch-config`);
+    toast(`Config fetched — ${snap.config.length.toLocaleString()} bytes`, 'success');
+    _updateDeviceSyncBadge(deviceId, 'synced');
+  } catch(e) { toast(`Fetch failed: ${e.message}`, 'error'); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+async function doCheckSync(deviceId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/check-sync`);
+    _updateDeviceSyncBadge(deviceId, r.status);
+    if (r.status === 'out-of-sync') {
+      openDiffModal(r, deviceId);
+    } else if (r.status === 'no-snapshot') {
+      toast('No snapshot — run Fetch Config first', 'warning');
+    } else {
+      toast('✅ In sync', 'success');
+    }
+  } catch(e) { toast(`Check-sync failed: ${e.message}`, 'error'); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+async function doSync(deviceId, btn) {
+  // Sync-To = open backup browser so user can pick which snapshot to restore
+  openBackupsModal(deviceId);
+}
+
+let _backupsDeviceId = null;
+let _backupsSnaps    = [];   // cached snapshot list for viewBackup
+
+async function openBackupsModal(deviceId) {
+  _backupsDeviceId = deviceId;
+  const d = devices.find(x => x.id === deviceId);
+  document.getElementById('backups-modal-title').textContent =
+    `Backups — ${d ? d.name : 'Device ' + deviceId}`;
+  document.getElementById('backups-list').innerHTML =
+    '<div style="color:var(--muted);font-size:12px;padding:8px;">Loading…</div>';
+  document.getElementById('backups-modal').classList.remove('hidden');
+
+  try {
+    const snaps = await api('GET', `/api/devices/${deviceId}/snapshots`);
+    renderBackupsList(snaps, deviceId);
+  } catch(e) {
+    document.getElementById('backups-list').innerHTML =
+      `<div style="color:var(--danger);font-size:12px;">${e.message}</div>`;
+  }
+}
+
+function closeBackupsModal() {
+  document.getElementById('backups-modal').classList.add('hidden');
+  _backupsDeviceId = null;
+}
+
+function renderBackupsList(snaps, deviceId) {
+  _backupsSnaps = snaps;   // store so viewBackup can access without another fetch
+  const list = document.getElementById('backups-list');
+  if (!snaps.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No backups yet — run Sync-From first.</div>';
+    return;
+  }
+
+  // Pre-compute diff stats for every snapshot against its predecessor
+  const stats = snaps.map((s, i) => {
+    const prev = snaps[i + 1];
+    if (!prev) return null;
+    const d = diffLines(prev.config, s.config);
+    return {
+      added:   d.filter(x => x.t === '+').length,
+      removed: d.filter(x => x.t === '-').length,
+    };
+  });
+
+  list.innerHTML = snaps.map((s, i) => {
+    const label = (i === 0 ? '⭐ Latest — ' : '') + new Date(s.fetched_at + 'Z').toLocaleString();
+    let diffBadge;
+    if (stats[i]) {
+      const { added, removed } = stats[i];
+      if (added === 0 && removed === 0) {
+        diffBadge = `<span style="font-size:10px;color:var(--muted);margin-left:8px;">no changes</span>`;
+      } else {
+        diffBadge =
+          (added   ? `<span style="font-size:10px;color:#6fdb6f;margin-left:8px;">+${added}</span>` : '') +
+          (removed ? `<span style="font-size:10px;color:#db6f6f;margin-left:6px;">-${removed}</span>` : '');
+      }
+    } else {
+      diffBadge = `<span style="font-size:10px;color:var(--muted);margin-left:8px;">oldest</span>`;
+    }
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+                background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+      <div>
+        <span style="font-size:12px;font-weight:600;color:var(--text);">${label}</span>
+        ${diffBadge}
+        <span style="font-size:11px;color:var(--muted);margin-left:8px;">${s.config.length.toLocaleString()} bytes</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="viewBackup(${i})">View diff</button>
+        <button class="btn btn-primary" style="font-size:11px;"
+          onclick="restoreBackup(${deviceId}, ${s.id}, this)">↩ Restore</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Diff helpers ──────────────────────────────────────────────────────────────
+
+function _lcsBacktrack(a, b, dp, i, j, out) {
+  if (i === 0 && j === 0) return;
+  if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
+    _lcsBacktrack(a, b, dp, i-1, j-1, out);
+    out.push({t:'=', l: b[j-1]});
+  } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+    _lcsBacktrack(a, b, dp, i, j-1, out);
+    out.push({t:'+', l: b[j-1]});
+  } else {
+    _lcsBacktrack(a, b, dp, i-1, j, out);
+    out.push({t:'-', l: a[i-1]});
+  }
+}
+
+function diffLines(oldText, newText) {
+  const a = (oldText || '').split('\n');
+  const b = (newText || '').split('\n');
+  const m = a.length, n = b.length;
+  // For very large configs fall back to set-based diff to stay fast
+  if (m * n > 1_500_000) {
+    const aSet = new Set(a), bSet = new Set(b);
+    const result = [];
+    b.forEach(l => result.push({t: aSet.has(l) ? '=' : '+', l}));
+    a.forEach(l => { if (!bSet.has(l)) result.push({t:'-', l}); });
+    return result;
+  }
+  const dp = Array.from({length: m+1}, () => new Int32Array(n+1));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  const out = [];
+  _lcsBacktrack(a, b, dp, m, n, out);
+  return out;
+}
+
+function renderDiffHtml(diff) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return diff.map(({t, l}) => {
+    if (t === '+') return `<span style="background:#0d2e0d;color:#6fdb6f;display:block">+${esc(l)}</span>`;
+    if (t === '-') return `<span style="background:#2e0d0d;color:#db6f6f;display:block">-${esc(l)}</span>`;
+    return `<span style="display:block"> ${esc(l)}</span>`;
+  }).join('');
+}
+
+function viewBackup(idx) {
+  const s    = _backupsSnaps[idx];
+  const prev = _backupsSnaps[idx + 1];   // older snapshot (list is newest-first)
+  if (!s) return;
+
+  const label = new Date(s.fetched_at + 'Z').toLocaleString();
+  document.getElementById('config-modal-title').textContent = `Backup — ${label}`;
+  cancelEditConfig();
+  // Hide edit buttons — this is a read-only diff view
+  document.getElementById('config-btn-edit').classList.add('hidden');
+  closeBackupsModal();
+  document.getElementById('config-modal').classList.remove('hidden');
+
+  const pre  = document.getElementById('config-modal-pre');
+  const info = document.getElementById('config-modal-info');
+
+  if (prev) {
+    const diff  = diffLines(prev.config, s.config);
+    const added = diff.filter(d => d.t === '+').length;
+    const removed = diff.filter(d => d.t === '-').length;
+    const unchanged = diff.filter(d => d.t === '=').length;
+    info.innerHTML =
+      `vs <em>${new Date(prev.fetched_at + 'Z').toLocaleString()}</em> &nbsp;·&nbsp; ` +
+      `<span style="color:#6fdb6f">+${added} added</span> &nbsp; ` +
+      `<span style="color:#db6f6f">-${removed} removed</span> &nbsp; ` +
+      `<span style="color:var(--muted)">${unchanged} unchanged</span>`;
+    pre.innerHTML = renderDiffHtml(diff);
+  } else {
+    info.textContent = `${label} · ${s.config.length.toLocaleString()} bytes · (oldest backup — no previous to diff against)`;
+    pre.textContent = s.config;
+  }
+}
+
+// Restore edit button visibility when config modal is used normally
+const _origDoShowConfig = typeof doShowConfig !== 'undefined' ? doShowConfig : null;
+
+async function restoreBackup(deviceId, snapId, btn) {
+  if (!confirm('Restore this backup to the device? The device config will be overwritten.')) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Restoring…';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/restore/${snapId}`);
+    toast(`✅ ${r.message}`, 'success');
+    _updateDeviceSyncBadge(deviceId, 'synced');
+    closeBackupsModal();
+  } catch(e) {
+    toast(`Restore failed: ${e.message}`, 'error');
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+async function doShowConfig(deviceId) {
+  try {
+    const snap = await api('GET', `/api/devices/${deviceId}/config`);
+    const d = (devices || []).find(x => x.id === deviceId);
+    _configModalDeviceId = deviceId;
+    document.getElementById('config-modal-title').textContent =
+      `Config — ${d ? d.name : 'Device ' + deviceId}`;
+    document.getElementById('config-modal-info').textContent =
+      `Fetched: ${new Date(snap.fetched_at + 'Z').toLocaleString()}  ·  ${snap.config.length.toLocaleString()} bytes`;
+    document.getElementById('config-modal-pre').textContent = snap.config;
+    cancelEditConfig();   // ensure editor is hidden on open
+    document.getElementById('config-btn-edit').classList.remove('hidden');  // restore edit btn
+    document.getElementById('config-modal').classList.remove('hidden');
+  } catch(e) { toast(`No config stored: ${e.message}`, 'error'); }
+}
+
+let _configModalDeviceId = null;
+
+function closeConfigModal() {
+  document.getElementById('config-modal').classList.add('hidden');
+  cancelEditConfig();
+  document.getElementById('config-btn-edit').classList.remove('hidden');  // restore for next open
+  _configModalDeviceId = null;
+}
+
+function copyConfigModal() {
+  // Use innerText so line breaks are preserved whether content is text or diff HTML
+  const text = document.getElementById('config-modal-pre').innerText;
+  navigator.clipboard.writeText(text).then(() => toast('Copied', 'success'));
+}
+
+function startEditConfig() {
+  const pre  = document.getElementById('config-modal-pre');
+  const edit = document.getElementById('config-modal-editor');
+  edit.value = pre.textContent;
+  pre.classList.add('hidden');
+  edit.classList.remove('hidden');
+  document.getElementById('config-btn-edit').classList.add('hidden');
+  document.getElementById('config-btn-copy').classList.add('hidden');
+  document.getElementById('config-btn-apply').classList.remove('hidden');
+  document.getElementById('config-btn-cancel').classList.remove('hidden');
+  document.getElementById('config-apply-output').classList.add('hidden');
+  document.getElementById('config-preview-panel').classList.add('hidden');
+}
+
+function cancelEditConfig() {
+  document.getElementById('config-modal-pre').classList.remove('hidden');
+  document.getElementById('config-modal-editor').classList.add('hidden');
+  document.getElementById('config-btn-edit').classList.remove('hidden');
+  document.getElementById('config-btn-copy').classList.remove('hidden');
+  document.getElementById('config-btn-apply').classList.add('hidden');
+  document.getElementById('config-btn-cancel').classList.add('hidden');
+  document.getElementById('config-apply-output').classList.add('hidden');
+  document.getElementById('config-preview-panel').classList.add('hidden');
+}
+
+async function applyConfig() {
+  if (!_configModalDeviceId) return;
+  const configText = document.getElementById('config-modal-editor').value;
+  const btn = document.getElementById('config-btn-apply');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Previewing…';
+
+  try {
+    // Step 1: fetch preview / delta
+    const preview = await api('POST', `/api/devices/${_configModalDeviceId}/preview-config`,
+                              { config: configText });
+
+    if (!preview.has_changes) {
+      toast('No changes detected — config matches stored snapshot', 'info');
+      btn.disabled = false; btn.textContent = orig;
+      return;
+    }
+
+    // Step 2: show preview panel and ask for confirmation
+    // Use resolved_config (canonical names) for the actual apply
+    const canonicalConfig = preview.resolved_config || configText;
+    showPreviewPanel(preview, canonicalConfig, btn, orig);
+  } catch(e) {
+    toast(`Preview failed: ${e.message}`, 'error');
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+function showPreviewPanel(preview, configText, applyBtn, applyBtnOrig) {
+  const { commands, summary } = preview;
+  const panel = document.getElementById('config-preview-panel');
+  const pre   = document.getElementById('config-preview-pre');
+
+  // Colour-code: 'no ' lines in red, others in green
+  pre.innerHTML = commands.map(cmd => {
+    const safe = escHtml(cmd);
+    if (cmd.trim().startsWith('no '))
+      return `<span style="color:#f85149">${safe}</span>`;
+    return `<span style="color:#3fb950">${safe}</span>`;
+  }).join('\n');
+
+  document.getElementById('config-preview-summary').textContent =
+    `${summary.total} command(s): +${summary.added} add / -${summary.removed} remove`;
+
+  panel.classList.remove('hidden');
+
+  // Wire up Confirm button (replace to avoid duplicate listeners)
+  const confirmBtn = document.getElementById('config-preview-confirm');
+  const newConfirm = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+  newConfirm.addEventListener('click', async () => {
+    panel.classList.add('hidden');
+    applyBtn.textContent = 'Applying…';
+    try {
+      const r = await api('POST', `/api/devices/${_configModalDeviceId}/apply-config`,
+                          { config: configText });
+      toast(`✅ ${r.message}`, 'success');
+      document.getElementById('config-apply-pre').textContent = r.output || '(no output)';
+      document.getElementById('config-apply-output').classList.remove('hidden');
+      document.getElementById('config-modal-pre').textContent = configText;
+      cancelEditConfig();
+      loadSync();
+    } catch(e) { toast(`Apply failed: ${e.message}`, 'error'); }
+    applyBtn.disabled = false; applyBtn.textContent = applyBtnOrig;
+  });
+
+  // Wire up Cancel button
+  const cancelBtn = document.getElementById('config-preview-cancel');
+  const newCancel = cancelBtn.cloneNode(true);
+  cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+  newCancel.addEventListener('click', () => {
+    panel.classList.add('hidden');
+    applyBtn.disabled = false; applyBtn.textContent = applyBtnOrig;
+  });
+}
+
+function openDiffModal(r, deviceId) {
+  const d = (devices || []).find(x => x.id === deviceId);
+  document.getElementById('diff-modal-title').textContent =
+    `Check Sync — ${d ? d.name : 'Device ' + deviceId}`;
+  document.getElementById('diff-modal-status').innerHTML = _syncStatusBadge(r.status) +
+    `  <span style="color:var(--muted);font-size:13px;margin-left:8px;">${escHtml(r.message)}</span>`;
+
+  const pre = document.getElementById('diff-modal-body');
+  if (!r.diff) {
+    pre.textContent = '(no diff)';
+  } else {
+    pre.innerHTML = r.diff.split('\n').map(line => {
+      if (line.startsWith('+') && !line.startsWith('+++'))
+        return `<span style="color:#3fb950">${escHtml(line)}</span>`;
+      if (line.startsWith('-') && !line.startsWith('---'))
+        return `<span style="color:#f85149">${escHtml(line)}</span>`;
+      if (line.startsWith('@@'))
+        return `<span style="color:#58a6ff">${escHtml(line)}</span>`;
+      return escHtml(line);
+    }).join('\n');
+  }
+  document.getElementById('diff-modal').classList.remove('hidden');
+}
+function closeDiffModal() { document.getElementById('diff-modal').classList.add('hidden'); }
+
+// ════════════════════════════════════════════════
+// IPAM
+// ════════════════════════════════════════════════
+let ipamSubnets = [];
+let ipamVlans   = [];
+let ipamCurrentTab = 'subnets';
+
+function ipamTab(tab) {
+  ipamCurrentTab = tab;
+  ['subnets','addresses','vlans'].forEach(t => {
+    document.getElementById(`ipam-pane-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`ipam-tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'subnets')   loadIpamSubnets();
+  if (tab === 'addresses') loadIpamAddresses();
+  if (tab === 'vlans')     loadIpamVlans();
+}
+
+async function loadIpam() {
+  await Promise.all([loadIpamVlans(), loadIpamSubnets()]);
+  if (ipamCurrentTab === 'addresses') loadIpamAddresses();
+}
+
+// ── Subnets ──────────────────────────────────────
+
+async function loadIpamSubnets() {
+  const tbody = document.getElementById('ipam-subnet-tbody');
+  try {
+    ipamSubnets = await api('GET', '/api/ipam/subnets');
+    document.getElementById('ipam-subnet-count').textContent = `${ipamSubnets.length} subnet${ipamSubnets.length !== 1 ? 's' : ''}`;
+
+    // Refresh subnet filter in addresses pane
+    const sel = document.getElementById('ipam-addr-subnet-filter');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">All Subnets</option>' +
+      ipamSubnets.map(s => `<option value="${s.id}" ${s.id == prev ? 'selected' : ''}>${escHtml(s.network)}${s.vrf ? ' ['+escHtml(s.vrf)+']' : ''}</option>`).join('');
+
+    if (!ipamSubnets.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-sm" style="padding:16px;">No subnets yet — click "+ Add Subnet" to create one.</td></tr>';
+      return;
+    }
+
+    // Fetch utilization for all subnets in parallel
+    const utils = await Promise.allSettled(
+      ipamSubnets.map(s => api('GET', `/api/ipam/subnets/${s.id}/utilization`))
+    );
+
+    const vlanMap = {};
+    ipamVlans.forEach(v => vlanMap[v.id] = v);
+
+    tbody.innerHTML = ipamSubnets.map((s, i) => {
+      const u = utils[i].status === 'fulfilled' ? utils[i].value : null;
+      const pct = u ? u.utilization_pct : 0;
+      const bar = u ? `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;min-width:80px;">
+            <div style="height:100%;width:${Math.min(pct,100)}%;border-radius:3px;background:${pct>85?'var(--danger)':pct>60?'var(--warning)':'var(--success)'};"></div>
+          </div>
+          <span class="text-sm text-muted">${pct}% (${u.used+u.reserved}/${u.total})</span>
+        </div>` : '<span class="text-muted text-sm">—</span>';
+      const vlan = s.vlan_id && vlanMap[s.vlan_id] ? `<span class="badge badge-accent">VLAN ${vlanMap[s.vlan_id].vlan_id}</span>` : '<span class="text-muted">—</span>';
+      return `<tr class="device-table-row" style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 12px;font-weight:600;font-family:monospace;">${escHtml(s.network)}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(s.vrf) || '—'}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(s.site) || '—'}</td>
+        <td style="padding:10px 12px;">${vlan}</td>
+        <td style="padding:10px 12px;">${bar}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(s.description) || '—'}</td>
+        <td style="padding:10px 12px;white-space:nowrap;">
+          <button class="nso-btn" onclick="ipamNextFree(${s.id},'${escHtml(s.network)}')">Next Free</button>
+          <button class="nso-btn" style="margin-left:4px;border-color:#58a6ff66;color:var(--accent);background:#0d1f33;" onclick="editIpamSubnet(${s.id})">Edit</button>
+          <button class="nso-btn" style="margin-left:4px;border-color:#f8514966;color:var(--danger);background:#2a0a0a;" onclick="deleteIpamSubnet(${s.id})">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-sm" style="padding:16px;">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function ipamNextFree(subnetId, network) {
+  try {
+    const r = await api('GET', `/api/ipam/subnets/${subnetId}/next-free`);
+    showToast(`Next free in ${network}: ${r.next_free}`, 'info');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function deleteIpamSubnet(id) {
+  if (!confirm('Delete this subnet and all its IP addresses?')) return;
+  try {
+    await api('DELETE', `/api/ipam/subnets/${id}`);
+    showToast('Subnet deleted', 'success');
+    loadIpamSubnets();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Addresses ────────────────────────────────────
+
+const STATUS_BADGE = {
+  'available': '<span class="badge badge-success">available</span>',
+  'in-use':    '<span class="badge badge-accent">in-use</span>',
+  'reserved':  '<span class="badge badge-warning">reserved</span>',
+  'dhcp':      '<span class="badge" style="background:rgba(188,140,255,.15);color:#bc8cff;">dhcp</span>',
+};
+
+async function loadIpamAddresses() {
+  const tbody  = document.getElementById('ipam-addr-tbody');
+  const snFilter = document.getElementById('ipam-addr-subnet-filter').value;
+  const stFilter = document.getElementById('ipam-addr-status-filter').value;
+  try {
+    let url = '/api/ipam/addresses?';
+    if (snFilter) url += `subnet_id=${snFilter}&`;
+    if (stFilter) url += `status=${encodeURIComponent(stFilter)}&`;
+    const addrs = await api('GET', url);
+
+    // Build a subnet map for display
+    const snMap = {};
+    ipamSubnets.forEach(s => snMap[s.id] = s.network);
+
+    if (!addrs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">No IP addresses found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = addrs.map(a => `
+      <tr class="device-table-row" style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 12px;font-family:monospace;font-weight:600;">${escHtml(a.address)}</td>
+        <td style="padding:10px 12px;color:var(--muted);font-size:12px;">${escHtml(snMap[a.subnet_id] || String(a.subnet_id))}</td>
+        <td style="padding:10px 12px;">${STATUS_BADGE[a.status] || a.status}</td>
+        <td style="padding:10px 12px;">${escHtml(a.hostname) || '<span class="text-muted">—</span>'}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(a.description) || '—'}</td>
+        <td style="padding:10px 12px;white-space:nowrap;">
+          <button class="nso-btn" onclick="editIpamAddress(${a.id},'${escHtml(a.status)}','${escHtml(a.hostname)}','${escHtml(a.description)}')">Edit</button>
+          <button class="nso-btn" style="margin-left:4px;border-color:#f8514966;color:var(--danger);background:#2a0a0a;" onclick="deleteIpamAddress(${a.id})">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-sm" style="padding:16px;">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function deleteIpamAddress(id) {
+  if (!confirm('Release this IP address?')) return;
+  try {
+    await api('DELETE', `/api/ipam/addresses/${id}`);
+    showToast('IP released', 'success');
+    loadIpamAddresses();
+    loadIpamSubnets();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function editIpamAddress(id, status, hostname, description) {
+  const modal = document.getElementById('ipam-addr-edit-modal');
+  document.getElementById('ipam-edit-addr-id').value = id;
+  document.getElementById('ipam-edit-addr-status').value = status;
+  document.getElementById('ipam-edit-addr-hostname').value = hostname;
+  document.getElementById('ipam-edit-addr-description').value = description;
+  modal.classList.remove('hidden');
+}
+
+async function saveIpamAddressEdit() {
+  const id = document.getElementById('ipam-edit-addr-id').value;
+  const payload = {
+    status: document.getElementById('ipam-edit-addr-status').value,
+    hostname: document.getElementById('ipam-edit-addr-hostname').value,
+    description: document.getElementById('ipam-edit-addr-description').value,
+  };
+  try {
+    await api('PUT', `/api/ipam/addresses/${id}`, payload);
+    showToast('IP updated', 'success');
+    document.getElementById('ipam-addr-edit-modal').classList.add('hidden');
+    loadIpamAddresses();
+    loadIpamSubnets();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ── VLANs ────────────────────────────────────────
+
+async function loadIpamVlans() {
+  const tbody = document.getElementById('ipam-vlan-tbody');
+  try {
+    ipamVlans = await api('GET', '/api/ipam/vlans');
+    document.getElementById('ipam-vlan-count').textContent = `${ipamVlans.length} VLAN${ipamVlans.length !== 1 ? 's' : ''}`;
+    if (!ipamVlans.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-sm" style="padding:16px;">No VLANs yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = ipamVlans.map(v => `
+      <tr class="device-table-row" style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 12px;"><span class="badge badge-accent">VLAN ${v.vlan_id}</span></td>
+        <td style="padding:10px 12px;font-weight:600;">${escHtml(v.name)}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(v.site) || '—'}</td>
+        <td style="padding:10px 12px;color:var(--muted);">${escHtml(v.description) || '—'}</td>
+        <td style="padding:10px 12px;">
+          <button class="nso-btn" style="border-color:#f8514966;color:var(--danger);background:#2a0a0a;" onclick="deleteIpamVlan(${v.id})">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-sm" style="padding:16px;">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function deleteIpamVlan(id) {
+  if (!confirm('Delete this VLAN?')) return;
+  try {
+    await api('DELETE', `/api/ipam/vlans/${id}`);
+    showToast('VLAN deleted', 'success');
+    loadIpamVlans();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Modals ───────────────────────────────────────
+
+function openIpamModal(type) {
+  if (type === 'subnet') {
+    // Reset to "Add" mode
+    document.getElementById('ipam-subnet-modal-title').textContent = 'Add Subnet';
+    document.getElementById('ipam-subnet-submit-btn').textContent = 'Create Subnet';
+    document.getElementById('ipam-modal-subnet-id').value = '';
+    document.getElementById('ipam-modal-subnet-network').value = '';
+    document.getElementById('ipam-modal-subnet-network').disabled = false;
+    document.getElementById('ipam-modal-subnet-vrf').value = '';
+    document.getElementById('ipam-modal-subnet-site').value = '';
+    document.getElementById('ipam-modal-subnet-desc').value = '';
+    // Populate VLAN dropdown
+    const sel = document.getElementById('ipam-modal-subnet-vlan');
+    sel.innerHTML = '<option value="">— None —</option>' +
+      ipamVlans.map(v => `<option value="${v.id}">VLAN ${v.vlan_id} — ${escHtml(v.name)}</option>`).join('');
+    document.getElementById('ipam-subnet-modal').classList.remove('hidden');
+  } else if (type === 'address') {
+    const sel = document.getElementById('ipam-modal-addr-subnet');
+    sel.innerHTML = ipamSubnets.map(s => `<option value="${s.id}">${escHtml(s.network)}</option>`).join('');
+    document.getElementById('ipam-addr-modal').classList.remove('hidden');
+  } else if (type === 'vlan') {
+    document.getElementById('ipam-vlan-modal').classList.remove('hidden');
+  }
+}
+
+function editIpamSubnet(id) {
+  const s = ipamSubnets.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('ipam-subnet-modal-title').textContent = 'Edit Subnet';
+  document.getElementById('ipam-subnet-submit-btn').textContent = 'Save Changes';
+  document.getElementById('ipam-modal-subnet-id').value = id;
+  document.getElementById('ipam-modal-subnet-network').value = s.network;
+  document.getElementById('ipam-modal-subnet-network').disabled = true; // network CIDR can't change
+  document.getElementById('ipam-modal-subnet-vrf').value = s.vrf || '';
+  document.getElementById('ipam-modal-subnet-site').value = s.site || '';
+  document.getElementById('ipam-modal-subnet-desc').value = s.description || '';
+  const sel = document.getElementById('ipam-modal-subnet-vlan');
+  sel.innerHTML = '<option value="">— None —</option>' +
+    ipamVlans.map(v => `<option value="${v.id}" ${s.vlan_id === v.id ? 'selected' : ''}>VLAN ${v.vlan_id} — ${escHtml(v.name)}</option>`).join('');
+  document.getElementById('ipam-subnet-modal').classList.remove('hidden');
+}
+
+async function submitIpamSubnet() {
+  const id = document.getElementById('ipam-modal-subnet-id').value;
+  const isEdit = !!id;
+  const payload = {
+    vrf: document.getElementById('ipam-modal-subnet-vrf').value.trim(),
+    site: document.getElementById('ipam-modal-subnet-site').value.trim(),
+    description: document.getElementById('ipam-modal-subnet-desc').value.trim(),
+  };
+  const vlanSel = document.getElementById('ipam-modal-subnet-vlan').value;
+  payload.vlan_id = vlanSel ? parseInt(vlanSel) : null;
+  if (!isEdit) {
+    payload.network = document.getElementById('ipam-modal-subnet-network').value.trim();
+  }
+  try {
+    if (isEdit) {
+      await api('PUT', `/api/ipam/subnets/${id}`, payload);
+      showToast('Subnet updated', 'success');
+    } else {
+      await api('POST', '/api/ipam/subnets', payload);
+      showToast(`Subnet ${payload.network} created`, 'success');
+    }
+    document.getElementById('ipam-subnet-modal').classList.add('hidden');
+    loadIpamSubnets();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function submitIpamAddress() {
+  const payload = {
+    address: document.getElementById('ipam-modal-addr-ip').value.trim(),
+    subnet_id: parseInt(document.getElementById('ipam-modal-addr-subnet').value),
+    status: document.getElementById('ipam-modal-addr-status').value,
+    hostname: document.getElementById('ipam-modal-addr-hostname').value.trim(),
+    description: document.getElementById('ipam-modal-addr-desc').value.trim(),
+  };
+  try {
+    await api('POST', '/api/ipam/addresses', payload);
+    showToast(`${payload.address} allocated`, 'success');
+    document.getElementById('ipam-addr-modal').classList.add('hidden');
+    loadIpamAddresses();
+    loadIpamSubnets();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function submitIpamVlan() {
+  const payload = {
+    vlan_id: parseInt(document.getElementById('ipam-modal-vlan-id').value),
+    name: document.getElementById('ipam-modal-vlan-name').value.trim(),
+    site: document.getElementById('ipam-modal-vlan-site').value.trim(),
+    description: document.getElementById('ipam-modal-vlan-desc').value.trim(),
+  };
+  try {
+    await api('POST', '/api/ipam/vlans', payload);
+    showToast(`VLAN ${payload.vlan_id} created`, 'success');
+    document.getElementById('ipam-vlan-modal').classList.add('hidden');
+    loadIpamVlans();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// Boot
+// ════════════════════════════════════════════════
+if (token) { initApp(); }
+</script>
+<!-- ── LLD Template Modal ─────────────────────────── -->
+<div id="lld-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:680px;max-height:90vh;display:flex;flex-direction:column;">
+    <h3 id="lld-modal-title">New LLD Template</h3>
+    <input type="hidden" id="lld-modal-id" />
+    <div class="form-group">
+      <label>Template Name *</label>
+      <input id="lld-modal-name" placeholder="e.g. Branch Router Standard v1.0" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input id="lld-modal-desc" placeholder="Optional" />
+    </div>
+    <div class="form-group" style="flex:1;">
+      <label>YAML Rules</label>
+      <textarea id="lld-modal-yaml" style="font-family:monospace;font-size:12px;min-height:320px;resize:vertical;" placeholder="checks:
+  - id: ssh_v2
+    description: SSH version 2 must be enabled
+    type: must_contain
+    value: ip ssh version 2
+
+  - id: no_telnet
+    description: Telnet must be disabled
+    type: must_not_contain
+    value: transport input telnet
+
+  - id: ntp_configured
+    description: At least one NTP server configured
+    type: must_match_pattern
+    pattern: 'ntp server \d+'
+
+  - id: vty_ssh_only
+    description: VTY lines must only allow SSH
+    type: block_must_contain
+    block: line vty
+    value: transport input ssh
+
+  - id: service_pwd_enc
+    description: Service password-encryption enabled
+    type: must_contain
+    value: service password-encryption
+
+  - id: no_http
+    description: HTTP server must be disabled
+    type: must_not_match_pattern
+    pattern: '^ip http server$'"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeLldModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitLldTemplate()">Save Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LLD Run Check Modal ────────────────────────── -->
+<div id="lld-run-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:420px;">
+    <h3>Run Compliance Check</h3>
+    <p class="text-muted text-sm" style="margin-bottom:16px;" id="lld-run-template-name"></p>
+    <div class="form-group">
+      <label>Select Device *</label>
+      <select id="lld-run-device"></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('lld-run-modal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" id="lld-run-btn" onclick="runLldCheck()">▶ Run Check</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// LLD Compliance
+// ════════════════════════════════════════════════
+
+let lldTemplates = [];
+let lldActiveTemplateId = null;
+
+async function loadLldTemplates() {
+  const el = document.getElementById('lld-template-list');
+  const countEl = document.getElementById('lld-template-count');
+  try {
+    lldTemplates = await api('GET', '/api/lld/templates');
+    countEl.textContent = `${lldTemplates.length} template${lldTemplates.length !== 1 ? 's' : ''}`;
+    if (!lldTemplates.length) {
+      el.innerHTML = `<div class="card text-muted" style="padding:24px;text-align:center;">
+        No LLD templates yet — click <strong>+ New Template</strong> to create one.
+      </div>`;
+      return;
+    }
+    el.innerHTML = lldTemplates.map(t => `
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-weight:600;margin-bottom:2px;">${escHtml(t.name)}</div>
+          <div class="text-muted text-sm">${escHtml(t.description) || '—'}</div>
+          <div class="text-sm" style="margin-top:4px;color:var(--muted);">Updated ${new Date(t.updated_at).toLocaleDateString()}</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="nso-btn" style="border-color:#58a6ff66;color:var(--accent);background:#0d1f33;" onclick="openRunLldModal(${t.id})">▶ Run Check</button>
+          <button class="nso-btn" onclick="openLldModal(${t.id})">Edit</button>
+          <button class="nso-btn" style="border-color:#f8514966;color:var(--danger);background:#2a0a0a;" onclick="deleteLldTemplate(${t.id})">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="text-danger text-sm">${escHtml(e.message)}</div>`;
+  }
+}
+
+function openLldModal(templateId) {
+  document.getElementById('lld-modal-id').value = '';
+  document.getElementById('lld-modal-name').value = '';
+  document.getElementById('lld-modal-desc').value = '';
+  document.getElementById('lld-modal-yaml').value = '';
+  document.getElementById('lld-modal-title').textContent = 'New LLD Template';
+
+  if (templateId) {
+    const t = lldTemplates.find(x => x.id === templateId);
+    if (t) {
+      document.getElementById('lld-modal-id').value = t.id;
+      document.getElementById('lld-modal-name').value = t.name;
+      document.getElementById('lld-modal-desc').value = t.description;
+      document.getElementById('lld-modal-yaml').value = t.yaml_content;
+      document.getElementById('lld-modal-title').textContent = 'Edit LLD Template';
+    }
+  }
+  document.getElementById('lld-modal').classList.remove('hidden');
+}
+
+function closeLldModal() {
+  document.getElementById('lld-modal').classList.add('hidden');
+}
+
+async function submitLldTemplate() {
+  const id = document.getElementById('lld-modal-id').value;
+  const payload = {
+    name: document.getElementById('lld-modal-name').value.trim(),
+    description: document.getElementById('lld-modal-desc').value.trim(),
+    yaml_content: document.getElementById('lld-modal-yaml').value,
+  };
+  if (!payload.name) { showToast('Template name is required', 'error'); return; }
+  if (!payload.yaml_content.trim()) { showToast('YAML rules are required', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', `/api/lld/templates/${id}`, payload);
+      showToast('Template updated', 'success');
+    } else {
+      await api('POST', '/api/lld/templates', payload);
+      showToast('Template created', 'success');
+    }
+    closeLldModal();
+    loadLldTemplates();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function deleteLldTemplate(id) {
+  if (!confirm('Delete this LLD template?')) return;
+  try {
+    await api('DELETE', `/api/lld/templates/${id}`);
+    showToast('Template deleted', 'success');
+    loadLldTemplates();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function openRunLldModal(templateId) {
+  lldActiveTemplateId = templateId;
+  const t = lldTemplates.find(x => x.id === templateId);
+  document.getElementById('lld-run-template-name').textContent = t ? t.name : '';
+  const sel = document.getElementById('lld-run-device');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const devs = await api('GET', '/api/devices');
+    sel.innerHTML = devs.length
+      ? devs.map(d => `<option value="${d.id}">${escHtml(d.name)} (${escHtml(d.host)})</option>`).join('')
+      : '<option value="">No devices available</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error loading devices</option>';
+  }
+  document.getElementById('lld-run-modal').classList.remove('hidden');
+}
+
+async function runLldCheck() {
+  const deviceId = document.getElementById('lld-run-device').value;
+  if (!deviceId) { showToast('Select a device', 'error'); return; }
+  const btn = document.getElementById('lld-run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    const result = await api('POST', `/api/lld/templates/${lldActiveTemplateId}/check/${deviceId}`);
+    document.getElementById('lld-run-modal').classList.add('hidden');
+    showLldReport(result);
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Run Check';
+  }
+}
+
+function showLldReport(r) {
+  const scoreColor = r.score_pct >= 80 ? 'var(--success)' : r.score_pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+  document.getElementById('lld-report-title').textContent =
+    `Compliance Report — ${r.template_name} on ${r.device_name}`;
+  document.getElementById('lld-score-pct').textContent = `${r.score_pct}%`;
+  document.getElementById('lld-score-pct').style.color = scoreColor;
+  document.getElementById('lld-score-passed').textContent = r.passed;
+  document.getElementById('lld-score-failed').textContent = r.failed;
+  document.getElementById('lld-score-total').textContent = r.total;
+
+  const tbody = document.getElementById('lld-results-tbody');
+  tbody.innerHTML = r.results.map(c => {
+    const pass = c.status === 'pass';
+    const badge = pass
+      ? '<span class="badge badge-success">PASS</span>'
+      : '<span class="badge badge-danger">FAIL</span>';
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px 12px;">${badge}</td>
+      <td style="padding:10px 12px;font-weight:500;">${escHtml(c.description)}</td>
+      <td style="padding:10px 12px;color:var(--muted);font-family:monospace;font-size:11px;">${escHtml(c.type)}</td>
+      <td style="padding:10px 12px;color:${pass ? 'var(--muted)' : 'var(--danger)'};font-size:12px;">${escHtml(c.detail) || (pass ? 'OK' : '')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lld-report-section').classList.remove('hidden');
+  document.getElementById('lld-report-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeLldReport() {
+  document.getElementById('lld-report-section').classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

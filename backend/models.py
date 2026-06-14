@@ -1,0 +1,313 @@
+"""
+models.py — SQLAlchemy DB models + Pydantic request/response schemas
+"""
+
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, EmailStr
+
+from backend.database import Base
+
+
+# ─────────────────────────────────────────────
+# SQLAlchemy Models (database tables)
+# ─────────────────────────────────────────────
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    devices = relationship("Device", back_populates="owner", cascade="all, delete")
+    analysis_results = relationship("AnalysisResult", back_populates="user", cascade="all, delete")
+
+
+class DeviceGroup(Base):
+    __tablename__ = "device_groups"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name        = Column(String, nullable=False)
+    description = Column(String, default="")
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+    devices = relationship("Device", back_populates="group")
+
+
+class Device(Base):
+    __tablename__ = "devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    host = Column(String, nullable=False)
+    port = Column(Integer, default=22)
+    username = Column(String, nullable=False)
+    encrypted_password = Column(String, nullable=False)
+    device_type = Column(String, default="cisco_ios")
+    site = Column(String, default="")
+    group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, nullable=True)
+
+    owner = relationship("User", back_populates="devices")
+    group = relationship("DeviceGroup", back_populates="devices")
+    analysis_results = relationship("AnalysisResult", back_populates="device", cascade="all, delete")
+    config_snapshots  = relationship("ConfigSnapshot", back_populates="device", cascade="all, delete")
+    sync_history      = relationship("SyncHistory",    back_populates="device", cascade="all, delete")
+
+
+class ConfigSnapshot(Base):
+    __tablename__ = "config_snapshots"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    config      = Column(Text, nullable=False)
+    fetched_at  = Column(DateTime, default=datetime.utcnow)
+
+    device = relationship("Device", back_populates="config_snapshots")
+
+
+class SyncHistory(Base):
+    __tablename__ = "sync_history"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    action      = Column(String, nullable=False)
+    status      = Column(String, nullable=False)
+    detail      = Column(Text, default="")
+    timestamp   = Column(DateTime, default=datetime.utcnow)
+
+    device = relationship("Device", back_populates="sync_history")
+
+
+class AnalysisResult(Base):
+    __tablename__ = "analysis_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    analysis_type = Column(String, nullable=False)
+    prompt = Column(Text, nullable=False)
+    result = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="analysis_results")
+    device = relationship("Device", back_populates="analysis_results")
+
+
+# ─────────────────────────────────────────────
+# Pydantic Schemas
+# ─────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class DeviceCreate(BaseModel):
+    name: str
+    host: str
+    port: int = 22
+    username: str
+    password: str
+    device_type: str = "cisco_ios"
+    site: str = ""
+
+
+class DeviceUpdate(BaseModel):
+    name: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    device_type: Optional[str] = None
+    site: Optional[str] = None
+
+
+class DeviceResponse(BaseModel):
+    id: int
+    name: str
+    host: str
+    port: int
+    username: str
+    device_type: str
+    site: str
+    created_at: datetime
+    last_seen: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class AnalysisRequest(BaseModel):
+    analysis_type: str
+    device_id: Optional[int] = None
+    custom_input: Optional[str] = None
+
+
+class AnalysisResponse(BaseModel):
+    id: int
+    analysis_type: str
+    result: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── NSO Sync Schemas ──────────────────────────────────────────────────────────
+
+class ConfigSnapshotResponse(BaseModel):
+    id: int
+    device_id: int
+    config: str
+    fetched_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SyncHistoryResponse(BaseModel):
+    id: int
+    device_id: int
+    action: str
+    status: str
+    detail: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CheckSyncResponse(BaseModel):
+    status: str
+    diff: str
+    message: str
+
+
+class ApplyConfigRequest(BaseModel):
+    config: str          # full config text edited by user
+
+
+class ApplyConfigResponse(BaseModel):
+    status: str          # 'applied' | 'error'
+    lines_sent: int
+    output: str
+    message: str
+
+
+# ── Services ──────────────────────────────────────────────────────────────────
+
+class ServiceTemplate(Base):
+    """
+    A reusable service template — Jinja2 body + YAML variable schema.
+    Customers create these themselves; no code changes needed.
+    """
+    __tablename__ = "service_templates"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name          = Column(String, nullable=False)
+    description   = Column(String, default="")
+    # Jinja2 template that renders to CLI commands (one per line)
+    template_body = Column(Text, nullable=False, default="")
+    # YAML that defines variable schema:
+    #   interface_name:
+    #     label: Interface Name
+    #     type: string
+    #     default: Loopback0
+    #     required: true
+    variables_schema = Column(Text, nullable=False, default="")
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    instances = relationship("ServiceInstance", back_populates="template", cascade="all, delete")
+
+
+class ServiceInstance(Base):
+    """A deployed service — template + resolved variable values on a device."""
+    __tablename__ = "service_instances"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    template_id  = Column(Integer, ForeignKey("service_templates.id"), nullable=False)
+    device_id    = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # JSON-encoded dict of variable values used at deploy time
+    variable_values = Column(Text, nullable=False, default="{}")
+    status       = Column(String, default="deployed")   # deployed | error
+    output       = Column(Text, default="")
+    deployed_at  = Column(DateTime, default=datetime.utcnow)
+
+    template = relationship("ServiceTemplate", back_populates="instances")
+
+
+# ── Service Pydantic Schemas ──────────────────────────────────────────────────
+
+class ServiceTemplateCreate(BaseModel):
+    name: str
+    description: str = ""
+    template_body: str
+    variables_schema: str   # raw YAML text
+
+
+class ServiceTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    template_body: Optional[str] = None
+    variables_schema: Optional[str] = None
+
+
+class ServiceTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    template_body: str
+    variables_schema: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ServicePreviewRequest(BaseModel):
+    variable_values: dict   # { "interface_name": "Loopback10", ... }
+
+
+class ServicePreviewResponse(BaseModel):
+    rendered: str           # rendered CLI lines joined by \n
+    lines: list[str]        # individual commands
+
+
+class ServiceDeployRequest(BaseModel):
+    device_id: int
+    variable_values: dict
+
+
+class ServiceDeployResponse(BaseModel):
+    status: str
+    lines_sent: int
+    output: str
+    message: str
+    instance_id: int

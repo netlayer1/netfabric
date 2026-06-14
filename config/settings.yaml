@@ -1,0 +1,31 @@
+# settings.yaml — App-level configuration
+# Secrets (API keys, passwords) go in .env — NOT here
+
+app:
+  name: "Network AI Orchestrator"
+  version: "1.0.0"
+
+ai:
+  model: "claude-opus-4-6"
+  max_tokens: 4096
+
+ssh:
+  default_timeout: 30        # seconds
+  default_port: 22
+  supported_device_types:
+    - cisco_ios
+    - cisco_nxos
+    - cisco_xr
+    - arista_eos
+    - juniper_junos
+    - fortinet
+
+polling:
+  # Future: scheduler interval for auto-pulling device data
+  interval_minutes: 15
+  enabled: false
+
+logging:
+  level: "INFO"
+  save_to_file: true
+  log_dir: "data/logs"
