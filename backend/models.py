@@ -2,6 +2,7 @@
 models.py — SQLAlchemy DB models + Pydantic request/response schemas
 """
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
@@ -77,14 +78,33 @@ class ConfigSnapshot(Base):
 class SyncHistory(Base):
     __tablename__ = "sync_history"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=False)
-    action      = Column(String, nullable=False)
-    status      = Column(String, nullable=False)
-    detail      = Column(Text, default="")
-    timestamp   = Column(DateTime, default=datetime.utcnow)
+    id             = Column(Integer, primary_key=True, index=True)
+    device_id      = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    action         = Column(String, nullable=False)
+    status         = Column(String, nullable=False)
+    detail         = Column(Text, default="")
+    timestamp      = Column(DateTime, default=datetime.utcnow)
+    transaction_id = Column(String, nullable=True, index=True)
 
     device = relationship("Device", back_populates="sync_history")
+
+
+class DeviceLock(Base):
+    """
+    Pessimistic device lock — prevents concurrent pushes by different engineers.
+    Locks auto-expire after LOCK_TIMEOUT_MINUTES to avoid permanent deadlocks.
+    """
+    __tablename__ = "device_locks"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    device_id      = Column(Integer, ForeignKey("devices.id"), unique=True, nullable=False)
+    user_id        = Column(Integer, ForeignKey("users.id"), nullable=False)
+    transaction_id = Column(String, nullable=False, default=lambda: str(uuid.uuid4()))
+    locked_at      = Column(DateTime, default=datetime.utcnow)
+    expires_at     = Column(DateTime, nullable=False)
+
+    device = relationship("Device")
+    user   = relationship("User")
 
 
 class AnalysisResult(Base):
@@ -195,6 +215,18 @@ class SyncHistoryResponse(BaseModel):
     status: str
     detail: str
     timestamp: datetime
+    transaction_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DeviceLockResponse(BaseModel):
+    device_id: int
+    locked_by: str          # engineer's email
+    transaction_id: str
+    locked_at: datetime
+    expires_at: datetime
 
     class Config:
         from_attributes = True
@@ -211,10 +243,11 @@ class ApplyConfigRequest(BaseModel):
 
 
 class ApplyConfigResponse(BaseModel):
-    status: str          # 'applied' | 'error'
+    status: str          # 'applied' | 'error' | 'no-change'
     lines_sent: int
     output: str
     message: str
+    transaction_id: Optional[str] = None
 
 
 # ── Services ──────────────────────────────────────────────────────────────────
@@ -311,6 +344,7 @@ class ServiceDeployResponse(BaseModel):
     output: str
     message: str
     instance_id: int
+    transaction_id: Optional[str] = None
 
 
 class ServiceDryRunRequest(BaseModel):

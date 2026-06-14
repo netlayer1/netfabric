@@ -23,11 +23,12 @@ Routes:
 """
 
 import os
+import uuid
 import logging
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
@@ -47,12 +48,13 @@ from jinja2 import Environment, StrictUndefined, UndefinedError, TemplateSyntaxE
 
 from backend.models import (
     User, Device, AnalysisResult, ConfigSnapshot, SyncHistory,
-    DeviceGroup,
+    DeviceGroup, DeviceLock,
     UserCreate, UserResponse, TokenResponse,
     DeviceCreate, DeviceUpdate, DeviceResponse,
     AnalysisRequest, AnalysisResponse,
     ConfigSnapshotResponse, SyncHistoryResponse, CheckSyncResponse,
     ApplyConfigRequest, ApplyConfigResponse,
+    DeviceLockResponse,
     ServiceTemplate, ServiceInstance,
     ServiceTemplateCreate, ServiceTemplateUpdate, ServiceTemplateResponse,
     ServicePreviewRequest, ServicePreviewResponse,
@@ -557,38 +559,45 @@ def restore_snapshot(
             message="Device already matches this snapshot",
         )
 
-    result = device_connector.apply_config_set(
-        host=device.host,
-        username=device.username,
-        password=plain_password,
-        config_lines=delta_commands,
-        device_type=device.device_type,
-        port=device.port,
-    )
-
-    if result["success"]:
-        # Save a new snapshot reflecting the restored state
-        new_snap = ConfigSnapshot(device_id=device_id, config=snap.config)
-        db.add(new_snap)
-        device.last_seen = datetime.utcnow()
-        summary = summarise_delta(delta_commands)
-        db.add(SyncHistory(
-            device_id=device_id, action="restore",
-            status="applied",
-            detail=f"Restored snapshot #{snapshot_id} from {snap.fetched_at.strftime('%Y-%m-%d %H:%M')} — delta: {summary['total']} commands",
-        ))
-        db.commit()
-        return ApplyConfigResponse(
-            status="applied",
-            lines_sent=result["lines_sent"],
-            output=result["output"],
-            message=f"Restored snapshot from {snap.fetched_at.strftime('%Y-%m-%d %H:%M UTC')}",
+    # Acquire exclusive device lock
+    txn_id = _acquire_lock(device_id, current_user.id, db)
+    try:
+        result = device_connector.apply_config_set(
+            host=device.host,
+            username=device.username,
+            password=plain_password,
+            config_lines=delta_commands,
+            device_type=device.device_type,
+            port=device.port,
         )
-    else:
-        db.add(SyncHistory(device_id=device_id, action="restore", status="error",
-                           detail=result["error"] or ""))
-        db.commit()
-        raise HTTPException(status_code=502, detail=result["error"])
+
+        if result["success"]:
+            # Save a new snapshot reflecting the restored state
+            new_snap = ConfigSnapshot(device_id=device_id, config=snap.config)
+            db.add(new_snap)
+            device.last_seen = datetime.utcnow()
+            summary = summarise_delta(delta_commands)
+            db.add(SyncHistory(
+                device_id=device_id, action="restore",
+                status="applied",
+                transaction_id=txn_id,
+                detail=f"Restored snapshot #{snapshot_id} from {snap.fetched_at.strftime('%Y-%m-%d %H:%M')} — delta: {summary['total']} commands",
+            ))
+            db.commit()
+            return ApplyConfigResponse(
+                status="applied",
+                lines_sent=result["lines_sent"],
+                output=result["output"],
+                message=f"Restored snapshot from {snap.fetched_at.strftime('%Y-%m-%d %H:%M UTC')}",
+                transaction_id=txn_id,
+            )
+        else:
+            db.add(SyncHistory(device_id=device_id, action="restore", status="error",
+                               transaction_id=txn_id, detail=result["error"] or ""))
+            db.commit()
+            raise HTTPException(status_code=502, detail=result["error"])
+    finally:
+        _release_lock(device_id, txn_id, db)
 
 
 @app.post("/api/devices/{device_id}/preview-config")
@@ -664,6 +673,9 @@ def apply_config(
     stored snapshot and produces the minimal IOS command list including
     'no <block>' for removed sections. Pushes only the delta commands.
     After a successful apply, saves the new config as a snapshot.
+
+    Acquires a device lock before pushing; returns 409 if another engineer
+    is already pushing to this device.
     """
     device = _get_owned_device(device_id, current_user.id, db)
     plain_password = decrypt_password(device.encrypted_password)
@@ -688,44 +700,102 @@ def apply_config(
             message="No changes detected between stored snapshot and submitted config",
         )
 
-    result = device_connector.apply_config_set(
-        host=device.host,
-        username=device.username,
-        password=plain_password,
-        config_lines=delta_commands,
-        device_type=device.device_type,
-        port=device.port,
-    )
-
-    if result["success"]:
-        # Pull the live config from the device after applying so the snapshot
-        # matches exactly what the device has (IOS-XE adds auto-generated lines
-        # like 'no shutdown' that differ from what was submitted).
-        try:
-            live_config = _fetch_running_config(device, db)
-        except Exception:
-            live_config = payload.config  # fallback to submitted config
-
-        new_snap = ConfigSnapshot(device_id=device_id, config=live_config)
-        db.add(new_snap)
-        device.last_seen = datetime.utcnow()
-        summary = summarise_delta(delta_commands)
-        db.add(SyncHistory(
-            device_id=device_id, action="apply-config", status="applied",
-            detail=f"Delta: +{summary['added']} -{summary['removed']} ({summary['total']} total commands)",
-        ))
-        db.commit()
-        return ApplyConfigResponse(
-            status="applied",
-            lines_sent=result["lines_sent"],
-            output=result["output"],
-            message=f"Applied delta: +{summary['added']} added, -{summary['removed']} removed",
+    # Acquire exclusive device lock
+    txn_id = _acquire_lock(device_id, current_user.id, db)
+    try:
+        result = device_connector.apply_config_set(
+            host=device.host,
+            username=device.username,
+            password=plain_password,
+            config_lines=delta_commands,
+            device_type=device.device_type,
+            port=device.port,
         )
-    else:
-        db.add(SyncHistory(device_id=device_id, action="apply-config", status="error",
-                           detail=result["error"] or ""))
-        db.commit()
-        raise HTTPException(status_code=502, detail=result["error"])
+
+        if result["success"]:
+            # Pull the live config from the device after applying so the snapshot
+            # matches exactly what the device has (IOS-XE adds auto-generated lines
+            # like 'no shutdown' that differ from what was submitted).
+            try:
+                live_config = _fetch_running_config(device, db)
+            except Exception:
+                live_config = payload.config  # fallback to submitted config
+
+            new_snap = ConfigSnapshot(device_id=device_id, config=live_config)
+            db.add(new_snap)
+            device.last_seen = datetime.utcnow()
+            summary = summarise_delta(delta_commands)
+            db.add(SyncHistory(
+                device_id=device_id, action="apply-config", status="applied",
+                transaction_id=txn_id,
+                detail=f"Delta: +{summary['added']} -{summary['removed']} ({summary['total']} total commands)",
+            ))
+            db.commit()
+            return ApplyConfigResponse(
+                status="applied",
+                lines_sent=result["lines_sent"],
+                output=result["output"],
+                message=f"Applied delta: +{summary['added']} added, -{summary['removed']} removed",
+                transaction_id=txn_id,
+            )
+        else:
+            db.add(SyncHistory(device_id=device_id, action="apply-config", status="error",
+                               transaction_id=txn_id, detail=result["error"] or ""))
+            db.commit()
+            raise HTTPException(status_code=502, detail=result["error"])
+    finally:
+        _release_lock(device_id, txn_id, db)
+
+
+@app.get("/api/devices/{device_id}/lock")
+def get_device_lock(
+    device_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return current lock status for a device, or null if unlocked."""
+    _get_owned_device(device_id, current_user.id, db)
+    now = datetime.utcnow()
+    lock = db.query(DeviceLock).filter(
+        DeviceLock.device_id == device_id,
+        DeviceLock.expires_at > now,
+    ).first()
+    if not lock:
+        return {"locked": False}
+    owner = db.query(User).filter(User.id == lock.user_id).first()
+    return {
+        "locked": True,
+        "locked_by": owner.email if owner else "unknown",
+        "transaction_id": lock.transaction_id,
+        "locked_at": lock.locked_at.isoformat(),
+        "expires_at": lock.expires_at.isoformat(),
+        "mine": lock.user_id == current_user.id,
+    }
+
+
+@app.delete("/api/devices/{device_id}/lock", status_code=204)
+def release_device_lock(
+    device_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Release YOUR own lock on a device.
+    Engineers cannot force-release another engineer's lock.
+    """
+    _get_owned_device(device_id, current_user.id, db)
+    lock = db.query(DeviceLock).filter(DeviceLock.device_id == device_id).first()
+    if not lock:
+        raise HTTPException(status_code=404, detail="No active lock on this device")
+    if lock.user_id != current_user.id:
+        owner = db.query(User).filter(User.id == lock.user_id).first()
+        raise HTTPException(
+            status_code=403,
+            detail=f"Lock is held by {owner.email if owner else 'another engineer'} — you cannot release it",
+        )
+    db.delete(lock)
+    db.commit()
+    logger.info(f"Lock manually released on device {device_id} by {current_user.email}")
 
 
 @app.get("/api/devices/{device_id}/sync-history", response_model=List[SyncHistoryResponse])
@@ -955,57 +1025,122 @@ def deploy_service(
     lines = _render_template(svc.template_body, payload.variable_values)
 
     plain_password = decrypt_password(device.encrypted_password)
-    result = device_connector.apply_config_set(
-        host=device.host,
-        username=device.username,
-        password=plain_password,
-        config_lines=lines,
-        device_type=device.device_type,
-        port=device.port,
-    )
 
-    inst = ServiceInstance(
-        template_id=svc_id,
-        device_id=payload.device_id,
-        user_id=current_user.id,
-        variable_values=json.dumps(payload.variable_values),
-        status="deployed" if result["success"] else "error",
-        output=result.get("output", "") or result.get("error", ""),
-    )
-    db.add(inst)
-    device.last_seen = datetime.utcnow()
-    db.commit()
-    db.refresh(inst)
-
-    if not result["success"]:
-        raise HTTPException(status_code=502, detail=result.get("error", "Deploy failed"))
-
-    # ── Auto-snapshot: pull running config immediately after deploy ──
-    # This keeps the stored baseline in sync with what the tool just pushed,
-    # so check-sync only flags changes made directly on the router.
+    # Acquire exclusive device lock
+    txn_id = _acquire_lock(payload.device_id, current_user.id, db)
     try:
-        new_config = _fetch_running_config(device, db)
-        snap = ConfigSnapshot(device_id=payload.device_id, config=new_config)
-        db.add(snap)
-        db.add(SyncHistory(
-            device_id=payload.device_id,
-            action="sync",
-            status="synced",
-            detail=f"Auto-snapshot after service deploy '{svc.name}' ({len(new_config):,} bytes)",
-        ))
-        db.commit()
-        logger.info(f"Auto-snapshot saved for device {device.name} after service deploy")
-    except Exception as e:
-        logger.warning(f"Auto-snapshot failed after deploy (device {device.name}): {e}")
-        # Non-fatal — deploy already succeeded
+        result = device_connector.apply_config_set(
+            host=device.host,
+            username=device.username,
+            password=plain_password,
+            config_lines=lines,
+            device_type=device.device_type,
+            port=device.port,
+        )
 
-    return ServiceDeployResponse(
-        status="deployed",
-        lines_sent=result["lines_sent"],
-        output=result["output"],
-        message=f"Service '{svc.name}' deployed — {len(lines)} commands sent",
-        instance_id=inst.id,
+        inst = ServiceInstance(
+            template_id=svc_id,
+            device_id=payload.device_id,
+            user_id=current_user.id,
+            variable_values=json.dumps(payload.variable_values),
+            status="deployed" if result["success"] else "error",
+            output=result.get("output", "") or result.get("error", ""),
+        )
+        db.add(inst)
+        device.last_seen = datetime.utcnow()
+        db.commit()
+        db.refresh(inst)
+
+        if not result["success"]:
+            raise HTTPException(status_code=502, detail=result.get("error", "Deploy failed"))
+
+        # ── Auto-snapshot: pull running config immediately after deploy ──
+        # This keeps the stored baseline in sync with what the tool just pushed,
+        # so check-sync only flags changes made directly on the router.
+        try:
+            new_config = _fetch_running_config(device, db)
+            snap = ConfigSnapshot(device_id=payload.device_id, config=new_config)
+            db.add(snap)
+            db.add(SyncHistory(
+                device_id=payload.device_id,
+                action="sync",
+                status="synced",
+                transaction_id=txn_id,
+                detail=f"Auto-snapshot after service deploy '{svc.name}' ({len(new_config):,} bytes)",
+            ))
+            db.commit()
+            logger.info(f"Auto-snapshot saved for device {device.name} after service deploy")
+        except Exception as e:
+            logger.warning(f"Auto-snapshot failed after deploy (device {device.name}): {e}")
+            # Non-fatal — deploy already succeeded
+
+        return ServiceDeployResponse(
+            status="deployed",
+            lines_sent=result["lines_sent"],
+            output=result["output"],
+            message=f"Service '{svc.name}' deployed — {len(lines)} commands sent",
+            instance_id=inst.id,
+            transaction_id=txn_id,
+        )
+    finally:
+        _release_lock(payload.device_id, txn_id, db)
+
+
+# ─────────────────────────────────────────────
+# Device Lock helpers
+# ─────────────────────────────────────────────
+
+LOCK_TIMEOUT_MINUTES = 10  # auto-expire stale locks
+
+
+def _acquire_lock(device_id: int, user_id: int, db: Session) -> str:
+    """
+    Acquire an exclusive write lock on a device.
+    Returns a new transaction_id on success.
+    Raises HTTP 409 if the device is already locked by another session.
+    Expired locks are cleaned up automatically.
+    """
+    now = datetime.utcnow()
+
+    # Remove stale locks first
+    db.query(DeviceLock).filter(DeviceLock.expires_at < now).delete(synchronize_session=False)
+    db.commit()
+
+    existing = db.query(DeviceLock).filter(DeviceLock.device_id == device_id).first()
+    if existing:
+        owner = db.query(User).filter(User.id == existing.user_id).first()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Device is locked by another engineer",
+                "locked_by": owner.email if owner else "unknown",
+                "transaction_id": existing.transaction_id,
+                "locked_at": existing.locked_at.isoformat(),
+                "expires_at": existing.expires_at.isoformat(),
+            },
+        )
+
+    txn_id = str(uuid.uuid4())
+    lock = DeviceLock(
+        device_id=device_id,
+        user_id=user_id,
+        transaction_id=txn_id,
+        expires_at=now + timedelta(minutes=LOCK_TIMEOUT_MINUTES),
     )
+    db.add(lock)
+    db.commit()
+    logger.info(f"Lock acquired on device {device_id} — txn={txn_id}")
+    return txn_id
+
+
+def _release_lock(device_id: int, transaction_id: str, db: Session) -> None:
+    """Release a device lock by transaction_id."""
+    db.query(DeviceLock).filter(
+        DeviceLock.device_id == device_id,
+        DeviceLock.transaction_id == transaction_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    logger.info(f"Lock released on device {device_id} — txn={transaction_id}")
 
 
 # ─────────────────────────────────────────────

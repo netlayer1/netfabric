@@ -1887,14 +1887,17 @@ async function loadSync() {
       return;
     }
 
-    // Fetch latest sync history for each device (best-effort)
+    // Fetch latest sync history + lock status for each device (best-effort)
     const rows = await Promise.all(devs.map(async d => {
-      let lastSync = null;
+      let lastSync = null, lockStatus = null;
       try {
         const h = await api('GET', `/api/devices/${d.id}/sync-history?limit=1`);
         if (h.length) lastSync = h[0];
       } catch(_) {}
-      return { device: d, lastSync };
+      try {
+        lockStatus = await api('GET', `/api/devices/${d.id}/lock`);
+      } catch(_) {}
+      return { device: d, lastSync, lockStatus };
     }));
 
     wrap.innerHTML = `
@@ -1905,11 +1908,13 @@ async function loadSync() {
             <th style="text-align:left;padding:8px 10px;">Host</th>
             <th style="text-align:left;padding:8px 10px;">Last Action</th>
             <th style="text-align:left;padding:8px 10px;">Status</th>
+            <th style="text-align:left;padding:8px 10px;">Lock</th>
+            <th style="text-align:left;padding:8px 10px;">Last Transaction ID</th>
             <th style="text-align:left;padding:8px 10px;">Actions</th>
           </tr>
         </thead>
         <tbody id="sync-tbody">
-          ${rows.map(r => renderSyncRow(r.device, r.lastSync)).join('')}
+          ${rows.map(r => renderSyncRow(r.device, r.lastSync, r.lockStatus)).join('')}
         </tbody>
       </table>`;
   } catch(e) { toast('Failed to load sync view', 'error'); }
@@ -1927,16 +1932,48 @@ function _syncStatusBadge(status) {
   return `<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;${style}">${(status||'—').toUpperCase()}</span>`;
 }
 
-function renderSyncRow(d, lastSync) {
+function renderSyncRow(d, lastSync, lockStatus) {
   const statusHtml = lastSync ? _syncStatusBadge(lastSync.status) : _syncStatusBadge('no-snapshot');
   const lastTime   = lastSync ? new Date(lastSync.timestamp + 'Z').toLocaleString() : '—';
   const action     = lastSync ? lastSync.action : '—';
+
+  // Lock badge
+  let lockHtml;
+  if (lockStatus && lockStatus.locked) {
+    const exp = new Date(lockStatus.expires_at + 'Z').toLocaleTimeString();
+    const who = escHtml(lockStatus.locked_by);
+    const mine = lockStatus.mine;
+    lockHtml = `
+      <div>
+        <span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;
+                     background:#3a1a0f;color:#f85149;">🔒 LOCKED</span>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">${who}</div>
+        <div style="font-size:10px;color:var(--muted);">expires ${exp}</div>
+        ${mine ? `<button onclick="doReleaseLock(${d.id},this)" style="margin-top:4px;font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);cursor:pointer;">Release</button>` : ''}
+      </div>`;
+  } else {
+    lockHtml = `<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;
+                             background:#0f2d1a;color:#3fb950;">🔓 FREE</span>`;
+  }
+
+  // Transaction ID — show last one with copy button
+  const txnId = lastSync && lastSync.transaction_id ? lastSync.transaction_id : null;
+  const txnHtml = txnId
+    ? `<span id="txn-${d.id}" style="font-family:monospace;font-size:10px;color:var(--accent);
+                word-break:break-all;">${escHtml(txnId)}</span>
+       <button onclick="copyTxn('${escHtml(txnId)}')"
+         style="margin-left:4px;font-size:10px;padding:1px 5px;border:1px solid var(--border);
+                border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;">copy</button>`
+    : `<span style="color:var(--muted);font-size:11px;">—</span>`;
+
   return `
     <tr id="sync-row-${d.id}" style="border-bottom:1px solid var(--border);">
       <td style="padding:10px;">${escHtml(d.name)}</td>
       <td style="padding:10px;color:var(--muted);">${escHtml(d.host)}</td>
       <td style="padding:10px;color:var(--muted);">${action}<br><span style="font-size:11px;">${lastTime}</span></td>
       <td style="padding:10px;" id="sync-status-${d.id}">${statusHtml}</td>
+      <td style="padding:10px;" id="sync-lock-${d.id}">${lockHtml}</td>
+      <td style="padding:10px;max-width:180px;" id="sync-txn-${d.id}">${txnHtml}</td>
       <td style="padding:10px;">
         <div class="flex gap-2" style="flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
@@ -1950,6 +1987,19 @@ function renderSyncRow(d, lastSync) {
         </div>
       </td>
     </tr>`;
+}
+
+function copyTxn(txnId) {
+  navigator.clipboard.writeText(txnId).then(() => toast('Transaction ID copied', 'success'));
+}
+
+async function doReleaseLock(deviceId, btn) {
+  btn.disabled = true;
+  try {
+    await api('DELETE', `/api/devices/${deviceId}/lock`);
+    toast('Lock released', 'success');
+    loadSync();
+  } catch(e) { toast(`Release failed: ${e.message}`, 'error'); btn.disabled = false; }
 }
 
 function _updateDeviceSyncBadge(deviceId, status) {
@@ -2282,8 +2332,27 @@ function showPreviewPanel(preview, configText, applyBtn, applyBtnOrig) {
       const r = await api('POST', `/api/devices/${_configModalDeviceId}/apply-config`,
                           { config: configText });
       toast(`✅ ${r.message}`, 'success');
-      document.getElementById('config-apply-pre').textContent = r.output || '(no output)';
+      const txnLine = r.transaction_id
+        ? `\nTransaction ID: ${r.transaction_id}` : '';
+      document.getElementById('config-apply-pre').textContent = (r.output || '(no output)') + txnLine;
       document.getElementById('config-apply-output').classList.remove('hidden');
+      // Show txn ID prominently below the output
+      let txnBanner = document.getElementById('config-apply-txn');
+      if (!txnBanner) {
+        txnBanner = document.createElement('div');
+        txnBanner.id = 'config-apply-txn';
+        document.getElementById('config-apply-output').appendChild(txnBanner);
+      }
+      if (r.transaction_id) {
+        txnBanner.innerHTML = `<div style="margin-top:8px;padding:8px 12px;background:#0d1f2d;border:1px solid var(--accent);
+          border-radius:6px;font-size:12px;">
+          <span style="color:var(--muted);">Transaction ID: </span>
+          <span style="font-family:monospace;color:var(--accent);">${escHtml(r.transaction_id)}</span>
+          <button onclick="navigator.clipboard.writeText('${escHtml(r.transaction_id)}').then(()=>toast('Copied','success'))"
+            style="margin-left:8px;font-size:11px;padding:2px 6px;border:1px solid var(--border);
+                   border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;">copy</button>
+        </div>`;
+      }
       document.getElementById('config-modal-pre').textContent = configText;
       cancelEditConfig();
       loadSync();
