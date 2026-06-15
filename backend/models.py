@@ -27,6 +27,7 @@ class User(Base):
 
     devices = relationship("Device", back_populates="owner", cascade="all, delete")
     analysis_results = relationship("AnalysisResult", back_populates="user", cascade="all, delete")
+    authgroups = relationship("Authgroup", backref="owner", cascade="all, delete")
 
 
 class DeviceGroup(Base):
@@ -41,6 +42,27 @@ class DeviceGroup(Base):
     devices = relationship("Device", back_populates="group")
 
 
+class Authgroup(Base):
+    """
+    NSO-style authgroup: a named set of credentials reused across many devices.
+    Instead of storing credentials per-device, store them once in an authgroup
+    and reference it by name — matches exactly how NSO handles device credentials.
+    """
+    __tablename__ = "authgroups"
+
+    id                 = Column(Integer, primary_key=True, index=True)
+    user_id            = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name               = Column(String, nullable=False)           # e.g. "default", "datacenter", "wan"
+    description        = Column(String, default="")
+    default_username   = Column(String, nullable=False)
+    encrypted_password = Column(String, nullable=False)
+    enable_password    = Column(String, nullable=True)            # Cisco enable secret (optional)
+    created_at         = Column(DateTime, default=datetime.utcnow)
+    updated_at         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    devices = relationship("Device", back_populates="authgroup_rel")
+
+
 class Device(Base):
     __tablename__ = "devices"
 
@@ -52,13 +74,30 @@ class Device(Base):
     username = Column(String, nullable=False)
     encrypted_password = Column(String, nullable=False)
     device_type = Column(String, default="cisco_ios")
+
+    # ── NED fields (NSO-inspired) ─────────────────────────────────────────
+    # ned_id: the specific NED managing this device, e.g. "cisco-ios-cli-6.115"
+    ned_id = Column(String, nullable=True, index=True)
+    # authgroup: name of the Authgroup used for credentials (optional — device
+    # can still carry its own username/password for backwards compat)
+    authgroup = Column(String, nullable=True, default="default")
+    # sync_state: last known sync status with the device
+    #   "unknown"     — never checked
+    #   "in-sync"     — last check-sync passed
+    #   "out-of-sync" — last check-sync detected drift
+    sync_state = Column(String, default="unknown")
+    # platform: detected platform string from the device (e.g. "Cisco IOS-XE 17.3.1a")
+    platform = Column(String, nullable=True)
+
     site = Column(String, default="")
     group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
+    authgroup_id = Column(Integer, ForeignKey("authgroups.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, nullable=True)
 
     owner = relationship("User", back_populates="devices")
     group = relationship("DeviceGroup", back_populates="devices")
+    authgroup_rel = relationship("Authgroup", back_populates="devices")
     analysis_results = relationship("AnalysisResult", back_populates="device", cascade="all, delete")
     config_snapshots  = relationship("ConfigSnapshot", back_populates="device", cascade="all, delete")
     sync_history      = relationship("SyncHistory",    back_populates="device", cascade="all, delete")
@@ -152,6 +191,8 @@ class DeviceCreate(BaseModel):
     username: str
     password: str
     device_type: str = "cisco_ios"
+    ned_id: Optional[str] = None        # e.g. "cisco-ios-cli-6.115"
+    authgroup: Optional[str] = "default"
     site: str = ""
 
 
@@ -162,6 +203,8 @@ class DeviceUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     device_type: Optional[str] = None
+    ned_id: Optional[str] = None
+    authgroup: Optional[str] = None
     site: Optional[str] = None
 
 
@@ -172,9 +215,41 @@ class DeviceResponse(BaseModel):
     port: int
     username: str
     device_type: str
+    ned_id: Optional[str] = None
+    authgroup: Optional[str] = None
+    sync_state: str = "unknown"
+    platform: Optional[str] = None
     site: str
     created_at: datetime
     last_seen: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# ── Authgroup Schemas ─────────────────────────────────────────────────────────
+
+class AuthgroupCreate(BaseModel):
+    name: str
+    description: str = ""
+    default_username: str
+    password: str
+    enable_password: Optional[str] = None
+
+
+class AuthgroupUpdate(BaseModel):
+    description: Optional[str] = None
+    default_username: Optional[str] = None
+    password: Optional[str] = None
+    enable_password: Optional[str] = None
+
+
+class AuthgroupResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    default_username: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

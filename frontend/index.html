@@ -331,6 +331,10 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           <span class="nav-label">LLD Compliance</span>
         </div>
+        <div class="nav-item" data-page="neds" onclick="showPage('neds')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+          <span class="nav-label">NEDs & Authgroups</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -427,11 +431,50 @@
           <button class="btn btn-ghost" onclick="loadSync()">↻ Refresh</button>
         </div>
         <div class="page-content">
-          <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">
-            Fetch, compare, and push device running configs.
-          </p>
-          <div id="sync-table-wrap">
-            <div class="text-muted text-sm">Loading devices…</div>
+          <!-- Sub-tabs -->
+          <div class="analysis-tabs" style="margin-bottom:20px;">
+            <button class="analysis-tab active" id="sync-tab-devices" onclick="syncTab('devices')">Devices</button>
+            <button class="analysis-tab" id="sync-tab-commits" onclick="syncTab('commits')">Commit Log</button>
+          </div>
+
+          <!-- Devices pane -->
+          <div id="sync-pane-devices">
+            <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">
+              Fetch, compare, and push device running configs.
+            </p>
+            <div id="sync-table-wrap">
+              <div class="text-muted text-sm">Loading devices…</div>
+            </div>
+          </div>
+
+          <!-- Commit Log pane -->
+          <div id="sync-pane-commits" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="commit-log-count"></span>
+              <div class="flex gap-2 items-center">
+                <select id="commit-log-device-filter" style="width:180px;font-size:12px;" onchange="loadCommitLog()">
+                  <option value="">All Devices</option>
+                </select>
+                <button class="btn btn-ghost" style="font-size:12px;" onclick="loadCommitLog()">↻ Refresh</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;">Time</th>
+                    <th style="text-align:left;padding:8px 12px;">Device</th>
+                    <th style="text-align:left;padding:8px 12px;">Action</th>
+                    <th style="text-align:left;padding:8px 12px;">Status</th>
+                    <th style="text-align:left;padding:8px 12px;">Transaction ID</th>
+                    <th style="text-align:left;padding:8px 12px;">Detail</th>
+                  </tr>
+                </thead>
+                <tbody id="commit-log-tbody">
+                  <tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -539,6 +582,37 @@
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- NEDs & Authgroups Page                        -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="page-neds" class="hidden">
+        <div class="page-header">
+          <h2>NEDs &amp; Authgroups</h2>
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="loadNeds()">↻ Refresh</button>
+        </div>
+        <div class="page-content">
+
+          <!-- NED Registry -->
+          <div style="margin-bottom:32px;">
+            <div class="home-section-title" style="margin-top:0;">NED Registry</div>
+            <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">Network Element Drivers registered in this orchestrator. Each NED handles one vendor/platform.</p>
+            <div id="ned-registry-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;"></div>
+          </div>
+
+          <!-- Authgroups -->
+          <div>
+            <div class="flex items-center justify-between" style="margin-bottom:14px;">
+              <div>
+                <div class="home-section-title" style="margin-top:0;margin-bottom:4px;">Authgroups</div>
+                <p style="color:var(--muted);font-size:12px;">Named credential sets shared across devices (like NSO authgroups).</p>
+              </div>
+              <button class="btn btn-primary" style="font-size:12px;" onclick="openAuthgroupModal()">+ New Authgroup</button>
+            </div>
+            <div id="authgroup-list" style="display:grid;gap:10px;max-width:700px;"></div>
+          </div>
         </div>
       </div>
 
@@ -659,6 +733,27 @@
   </div>
 </div>
 
+<!-- ── Transaction History Modal ─────────────────── -->
+<div id="txn-history-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:700px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:14px;">
+      <h3 id="txn-history-title">Transaction History</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="document.getElementById('txn-history-modal').classList.add('hidden')">✕</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;">
+          <th style="text-align:left;padding:6px 10px;">Time</th>
+          <th style="text-align:left;padding:6px 10px;">Action</th>
+          <th style="text-align:left;padding:6px 10px;">Status</th>
+          <th style="text-align:left;padding:6px 10px;">Transaction ID</th>
+        </tr>
+      </thead>
+      <tbody id="txn-history-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ── Diff Viewer Modal ──────────────────────────── -->
 <div id="diff-modal" class="modal-overlay hidden">
   <div class="modal" style="max-width:820px;width:95vw;">
@@ -699,30 +794,66 @@
         <input type="number" id="dm-port" value="22" />
       </div>
     </div>
-    <div class="form-group">
-      <label>SSH Username</label>
-      <input type="text" id="dm-username" placeholder="admin" />
+    <!-- Auth mode toggle -->
+    <div class="form-group" style="margin-bottom:8px;">
+      <label style="margin-bottom:6px;">Credentials</label>
+      <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;width:fit-content;">
+        <button id="dm-auth-mode-ag" onclick="setAuthMode('authgroup')"
+          style="padding:6px 16px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:600;">
+          Use Authgroup
+        </button>
+        <button id="dm-auth-mode-direct" onclick="setAuthMode('direct')"
+          style="padding:6px 16px;font-size:12px;border:none;cursor:pointer;background:var(--card);color:var(--muted);">
+          Per-device
+        </button>
+      </div>
     </div>
-    <div class="form-group">
-      <label>SSH Password</label>
-      <input type="password" id="dm-password" placeholder="••••••••" />
+
+    <!-- Authgroup selector (shown in authgroup mode) -->
+    <div id="dm-authgroup-section" class="form-group">
+      <label>Authgroup</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="dm-authgroup-select" style="flex:1;">
+          <option value="default">default</option>
+        </select>
+        <button class="btn btn-ghost" style="font-size:11px;white-space:nowrap;" onclick="showPage('neds')">+ New authgroup</button>
+      </div>
+      <div id="dm-authgroup-detail" style="margin-top:6px;font-size:11px;color:var(--muted);font-family:monospace;"></div>
     </div>
+
+    <!-- Per-device credentials (shown in direct mode) -->
+    <div id="dm-direct-section" style="display:none;">
+      <div class="form-group">
+        <label>SSH Username</label>
+        <input type="text" id="dm-username" placeholder="admin" />
+      </div>
+      <div class="form-group">
+        <label>SSH Password</label>
+        <input type="password" id="dm-password" placeholder="••••••••" />
+      </div>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group">
-        <label>Device Type</label>
-        <select id="dm-device-type">
-          <option value="cisco_ios">Cisco IOS</option>
+        <label>Device Type (Netmiko)</label>
+        <select id="dm-device-type" onchange="autoFillNedId(this.value)">
+          <option value="cisco_ios">Cisco IOS / IOS-XE</option>
           <option value="cisco_nxos">Cisco NX-OS</option>
           <option value="cisco_xr">Cisco IOS-XR</option>
           <option value="arista_eos">Arista EOS</option>
           <option value="juniper_junos">Juniper JunOS</option>
           <option value="fortinet">Fortinet FortiGate</option>
+          <option value="paloalto_panos">Palo Alto PAN-OS</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Site / Location</label>
-        <input type="text" id="dm-site" placeholder="HQ, Branch-1..." />
+        <label>NED ID</label>
+        <input type="text" id="dm-ned-id" placeholder="auto-detected" style="font-family:monospace;font-size:12px;" />
       </div>
+    </div>
+    <div class="form-group">
+      <label>Site / Location</label>
+      <input type="text" id="dm-site" placeholder="HQ, Branch-1..." />
     </div>
 
     <div class="modal-footer">
@@ -731,6 +862,72 @@
         Test Connection
       </button>
       <button class="btn btn-primary" onclick="saveDevice()" id="dm-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Live Status Modal ─────────────────────────── -->
+<div id="live-status-modal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal" style="max-width:860px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:16px;">
+      <div>
+        <h3 id="live-status-title" style="margin-bottom:4px;">Live Status</h3>
+        <div id="live-status-ned" style="font-size:11px;color:var(--muted);font-family:monospace;"></div>
+      </div>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="document.getElementById('live-status-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;" id="live-status-cats"></div>
+    <div id="live-status-output" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;min-height:200px;max-height:55vh;overflow:auto;">
+      <span style="color:var(--muted);font-size:12px;">Select a category above to pull live data from the device.</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;">Live-status data is real-time only — it is never stored or diffed.</div>
+  </div>
+</div>
+
+<!-- ── Compare Config Modal ──────────────────────── -->
+<div id="compare-modal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal" style="max-width:860px;width:95vw;">
+    <div class="flex justify-between items-center" style="margin-bottom:16px;">
+      <h3 id="compare-modal-title">compare-config</h3>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="document.getElementById('compare-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div id="compare-modal-summary" style="margin-bottom:12px;"></div>
+    <pre id="compare-modal-diff" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:55vh;font-size:12px;line-height:1.6;white-space:pre;"></pre>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('compare-modal').classList.add('hidden')">Close</button>
+      <button class="btn btn-primary" id="compare-sync-to-btn" onclick="doSyncToFromCompare()" style="display:none;">↑ sync-to (apply changes)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Authgroup Modal ────────────────────────────── -->
+<div id="authgroup-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeAuthgroupModal()">
+  <div class="modal" style="max-width:480px;width:95vw;">
+    <h3 id="authgroup-modal-title">New Authgroup</h3>
+    <input type="hidden" id="ag-modal-id" value="" />
+    <div class="form-group">
+      <label>Authgroup Name</label>
+      <input type="text" id="ag-name" placeholder="default, datacenter, wan..." />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="ag-description" placeholder="Optional description" />
+    </div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="ag-username" placeholder="admin" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="ag-password" placeholder="••••••••" />
+    </div>
+    <div class="form-group">
+      <label>Enable Password (optional)</label>
+      <input type="password" id="ag-enable" placeholder="leave blank if not needed" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAuthgroupModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAuthgroup()">Save</button>
     </div>
   </div>
 </div>
@@ -1106,6 +1303,8 @@ async function initApp() {
     document.getElementById('topbar-user-email').textContent = me.email;
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
+    // Pre-load authgroups so device modal dropdown is ready immediately
+    api('GET', '/api/authgroups').then(gs => { window._authgroupsCache = gs; }).catch(() => {});
     showPage('dashboard');
   } catch(e) {
     token = ''; localStorage.removeItem('nai_token');
@@ -1130,6 +1329,7 @@ function showPage(page) {
   if (page === 'sync')      loadSync();
   if (page === 'ipam')      loadIpam();
   if (page === 'lld')       loadLldTemplates();
+  if (page === 'neds')      loadNeds();
 }
 
 function toggleSidebar() {
@@ -1247,11 +1447,12 @@ function renderDeviceRow(d) {
       <td style="padding:10px 6px;text-align:center;color:var(--muted);">${d.port}</td>
       <td style="padding:10px 14px;white-space:nowrap;">
         <span style="font-size:10px;padding:2px 7px;border-radius:3px;background:#1a2535;color:var(--accent);border:1px solid var(--accent-dim);">
-          ${escHtml(d.device_type)}
+          ${escHtml(d.ned_id || d.device_type)}
         </span>
+        ${d.authgroup ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">auth: ${escHtml(d.authgroup)}</div>` : ''}
       </td>
       <td style="padding:10px 6px;text-align:center;" id="device-sync-status-${d.id}">
-        <span style="font-size:10px;color:var(--muted);">—</span>
+        ${_syncStateBadge(d.sync_state || 'unknown')}
       </td>
       <td style="padding:6px 4px;text-align:center;">${_actionBtn('ping',       `testDevice(${d.id},this)`)}</td>
       <td style="padding:6px 4px;text-align:center;">${_actionBtn('connect',    `testDevice(${d.id},this)`)}</td>
@@ -1319,11 +1520,16 @@ async function deleteDevice(id) {
 function openAddDeviceModal() {
   document.getElementById('device-modal-title').textContent = 'Add Device';
   document.getElementById('device-modal-id').value = '';
-  ['dm-name','dm-host','dm-username','dm-password','dm-site'].forEach(id => document.getElementById(id).value = '');
+  ['dm-name','dm-host','dm-site'].forEach(id => document.getElementById(id).value = '');
+  const u = document.getElementById('dm-username'); if (u) u.value = '';
+  const p = document.getElementById('dm-password'); if (p) p.value = '';
   document.getElementById('dm-port').value = '22';
   document.getElementById('dm-device-type').value = 'cisco_ios';
+  if (document.getElementById('dm-ned-id')) document.getElementById('dm-ned-id').value = 'cisco-ios-cli-1.0';
   document.getElementById('dm-test-btn').style.display = 'none';
   document.getElementById('dm-save-btn').textContent = 'Add Device';
+  _populateAuthgroupSelect(null);
+  setAuthMode('authgroup');
   document.getElementById('device-modal').classList.remove('hidden');
 }
 
@@ -1335,12 +1541,19 @@ function openEditDeviceModal(deviceId) {
   document.getElementById('dm-name').value = d.name;
   document.getElementById('dm-host').value = d.host;
   document.getElementById('dm-port').value = d.port;
-  document.getElementById('dm-username').value = d.username;
-  document.getElementById('dm-password').value = '';
+  const u = document.getElementById('dm-username'); if (u) u.value = d.username || '';
+  const p = document.getElementById('dm-password'); if (p) p.value = '';
   document.getElementById('dm-device-type').value = d.device_type;
+  if (document.getElementById('dm-ned-id')) document.getElementById('dm-ned-id').value = d.ned_id || '';
   document.getElementById('dm-site').value = d.site || '';
   document.getElementById('dm-test-btn').style.display = 'inline-flex';
   document.getElementById('dm-save-btn').textContent = 'Save Changes';
+  // Determine auth mode: if device has an authgroup name use that, else per-device
+  const ag = d.authgroup || 'default';
+  _populateAuthgroupSelect(ag);
+  // If device has its own username stored but no real authgroup_id, default to per-device
+  // We infer: if authgroup is non-null and not empty -> authgroup mode
+  setAuthMode(ag ? 'authgroup' : 'direct');
   document.getElementById('device-modal').classList.remove('hidden');
 }
 
@@ -1362,21 +1575,34 @@ async function testDeviceModal() {
 
 async function saveDevice() {
   const id = document.getElementById('device-modal-id').value;
+  const authMode = document.getElementById('dm-auth-mode-ag')?.style.background?.includes('var(--accent)') ||
+                   document.getElementById('dm-auth-mode-ag')?.classList.contains('active') ||
+                   window._dmAuthMode === 'authgroup' ? 'authgroup' : 'direct';
+  const usingAuthgroup = window._dmAuthMode === 'authgroup';
+  const agSelect = document.getElementById('dm-authgroup-select');
   const payload = {
     name:        document.getElementById('dm-name').value.trim(),
     host:        document.getElementById('dm-host').value.trim(),
     port:        parseInt(document.getElementById('dm-port').value) || 22,
-    username:    document.getElementById('dm-username').value.trim(),
-    password:    document.getElementById('dm-password').value,
     device_type: document.getElementById('dm-device-type').value,
+    ned_id:      document.getElementById('dm-ned-id')?.value.trim() || null,
+    authgroup:   usingAuthgroup ? (agSelect?.value || 'default') : null,
     site:        document.getElementById('dm-site').value.trim(),
   };
-
-  if (!payload.name || !payload.host || !payload.username) {
-    toast('Name, host, and username are required', 'error'); return;
+  if (!usingAuthgroup) {
+    payload.username = document.getElementById('dm-username')?.value.trim() || '';
+    payload.password = document.getElementById('dm-password')?.value || '';
+  } else {
+    // Placeholder values — backend will use authgroup credentials
+    payload.username = agSelect?.value || 'default';
+    payload.password = '__authgroup__';
   }
-  if (!id && !payload.password) {
-    toast('Password required for new devices', 'error'); return;
+
+  if (!payload.name || !payload.host) {
+    toast('Name and host are required', 'error'); return;
+  }
+  if (!usingAuthgroup && !id && !payload.password) {
+    toast('Password required for new devices (or use an authgroup)', 'error'); return;
   }
 
   const btn = document.getElementById('dm-save-btn');
@@ -1877,6 +2103,83 @@ function escHtml(str) {
 // Sync (NSO-style)
 // ════════════════════════════════════════════════
 
+function syncTab(tab) {
+  ['devices', 'commits'].forEach(t => {
+    document.getElementById(`sync-pane-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`sync-tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'commits') loadCommitLog();
+}
+
+async function loadCommitLog() {
+  const tbody = document.getElementById('commit-log-tbody');
+  const countEl = document.getElementById('commit-log-count');
+  const filterEl = document.getElementById('commit-log-device-filter');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>';
+
+  try {
+    // Populate device filter if empty
+    if (filterEl.options.length <= 1) {
+      const devs = await api('GET', '/api/devices');
+      devs.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id; opt.textContent = d.name;
+        filterEl.appendChild(opt);
+      });
+    }
+
+    // Fetch history for selected device or all devices
+    const selectedId = filterEl.value;
+    let rows = [];
+    if (selectedId) {
+      const h = await api('GET', `/api/devices/${selectedId}/sync-history?limit=100`);
+      const devName = filterEl.options[filterEl.selectedIndex].textContent;
+      rows = h.map(e => ({ ...e, device_name: devName }));
+    } else {
+      const devs = await api('GET', '/api/devices');
+      const all = await Promise.all(devs.map(async d => {
+        try {
+          const h = await api('GET', `/api/devices/${d.id}/sync-history?limit=100`);
+          return h.map(e => ({ ...e, device_name: d.name }));
+        } catch(_) { return []; }
+      }));
+      rows = all.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }
+
+    countEl.textContent = `${rows.length} entries`;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">No history yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(h => {
+      const time = new Date(h.timestamp + 'Z').toLocaleString();
+      const statusColor = (h.status === 'applied' || h.status === 'synced') ? 'var(--success)'
+                        : h.status === 'error' ? 'var(--danger)' : 'var(--warning)';
+      const txn = h.transaction_id
+        ? `<div style="display:flex;align-items:center;gap:6px;">
+             <span style="font-family:monospace;font-size:11px;color:var(--accent);">${escHtml(h.transaction_id)}</span>
+             <button onclick="copyTxn('${escHtml(h.transaction_id)}')"
+               style="font-size:10px;padding:1px 6px;border:1px solid var(--border);border-radius:3px;
+                      background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;">copy</button>
+           </div>`
+        : `<span style="color:var(--muted);">—</span>`;
+      const detail = h.detail ? `<span title="${escHtml(h.detail)}" style="color:var(--muted);font-size:11px;">${escHtml(h.detail.slice(0,60))}${h.detail.length>60?'…':''}</span>` : '';
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 12px;color:var(--muted);font-size:11px;white-space:nowrap;">${time}</td>
+        <td style="padding:8px 12px;font-weight:500;">${escHtml(h.device_name)}</td>
+        <td style="padding:8px 12px;">${escHtml(h.action)}</td>
+        <td style="padding:8px 12px;font-weight:600;color:${statusColor};">${escHtml(h.status)}</td>
+        <td style="padding:8px 12px;">${txn}</td>
+        <td style="padding:8px 12px;max-width:220px;">${detail}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Error: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
 async function loadSync() {
   const wrap = document.getElementById('sync-table-wrap');
   wrap.innerHTML = '<div class="text-muted text-sm">Loading…</div>';
@@ -1889,15 +2192,17 @@ async function loadSync() {
 
     // Fetch latest sync history + lock status for each device (best-effort)
     const rows = await Promise.all(devs.map(async d => {
-      let lastSync = null, lockStatus = null;
+      let lastSync = null, lastTxnSync = null, lockStatus = null;
       try {
-        const h = await api('GET', `/api/devices/${d.id}/sync-history?limit=1`);
+        const h = await api('GET', `/api/devices/${d.id}/sync-history?limit=10`);
         if (h.length) lastSync = h[0];
+        // Find the most recent entry that has a transaction_id (write operations only)
+        lastTxnSync = h.find(e => e.transaction_id) || null;
       } catch(_) {}
       try {
         lockStatus = await api('GET', `/api/devices/${d.id}/lock`);
       } catch(_) {}
-      return { device: d, lastSync, lockStatus };
+      return { device: d, lastSync, lastTxnSync, lockStatus };
     }));
 
     wrap.innerHTML = `
@@ -1914,7 +2219,7 @@ async function loadSync() {
           </tr>
         </thead>
         <tbody id="sync-tbody">
-          ${rows.map(r => renderSyncRow(r.device, r.lastSync, r.lockStatus)).join('')}
+          ${rows.map(r => renderSyncRow(r.device, r.lastSync, r.lockStatus, r.lastTxnSync)).join('')}
         </tbody>
       </table>`;
   } catch(e) { toast('Failed to load sync view', 'error'); }
@@ -1932,7 +2237,7 @@ function _syncStatusBadge(status) {
   return `<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;${style}">${(status||'—').toUpperCase()}</span>`;
 }
 
-function renderSyncRow(d, lastSync, lockStatus) {
+function renderSyncRow(d, lastSync, lockStatus, lastTxnSync) {
   const statusHtml = lastSync ? _syncStatusBadge(lastSync.status) : _syncStatusBadge('no-snapshot');
   const lastTime   = lastSync ? new Date(lastSync.timestamp + 'Z').toLocaleString() : '—';
   const action     = lastSync ? lastSync.action : '—';
@@ -1956,10 +2261,12 @@ function renderSyncRow(d, lastSync, lockStatus) {
                              background:#0f2d1a;color:#3fb950;">🔓 FREE</span>`;
   }
 
-  // Transaction ID — show last one with copy button
-  const txnId = lastSync && lastSync.transaction_id ? lastSync.transaction_id : null;
+  // Transaction ID — show last WRITE operation's txn ID (persists even after check-sync)
+  const txnId = lastTxnSync ? lastTxnSync.transaction_id : null;
+  const txnAction = lastTxnSync ? lastTxnSync.action : null;
   const txnHtml = txnId
-    ? `<span id="txn-${d.id}" style="font-family:monospace;font-size:10px;color:var(--accent);
+    ? `<div style="font-size:10px;color:var(--muted);margin-bottom:3px;">${escHtml(txnAction)}</div>
+       <span id="txn-${d.id}" style="font-family:monospace;font-size:10px;color:var(--accent);
                 word-break:break-all;">${escHtml(txnId)}</span>
        <button onclick="copyTxn('${escHtml(txnId)}')"
          style="margin-left:4px;font-size:10px;padding:1px 5px;border:1px solid var(--border);
@@ -1977,13 +2284,17 @@ function renderSyncRow(d, lastSync, lockStatus) {
       <td style="padding:10px;">
         <div class="flex gap-2" style="flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
-            onclick="doFetchConfig(${d.id},this)">Fetch Config</button>
+            onclick="doSyncFrom(${d.id},this)" title="NSO: sync-from — pull device config into orchestrator">↓ sync-from</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
-            onclick="doCheckSync(${d.id},this)">Check Sync</button>
+            onclick="doCompareConfig(${d.id},this)" title="NSO: compare-config — diff without pushing">⇄ compare</button>
           <button class="btn btn-primary" style="font-size:11px;padding:4px 9px;"
-            onclick="doSync(${d.id},this)">Sync</button>
+            onclick="doSyncTo(${d.id},this)" title="NSO: sync-to — push orchestrator config to device">↑ sync-to</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
             onclick="doShowConfig(${d.id})">View / Edit Config</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="openLiveStatus(${d.id},'${escHtml(d.name)}',${JSON.stringify(d.ned_id||d.device_type)})">Live Status</button>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="openTxnHistory(${d.id},'${escHtml(d.name)}')">History</button>
         </div>
       </td>
     </tr>`;
@@ -2000,6 +2311,39 @@ async function doReleaseLock(deviceId, btn) {
     toast('Lock released', 'success');
     loadSync();
   } catch(e) { toast(`Release failed: ${e.message}`, 'error'); btn.disabled = false; }
+}
+
+async function openTxnHistory(deviceId, deviceName) {
+  document.getElementById('txn-history-title').textContent = `Transaction History — ${deviceName}`;
+  const tbody = document.getElementById('txn-history-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-sm" style="padding:12px;">Loading…</td></tr>';
+  document.getElementById('txn-history-modal').classList.remove('hidden');
+  try {
+    const history = await api('GET', `/api/devices/${deviceId}/sync-history?limit=10`);
+    if (!history.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-sm" style="padding:12px;">No history yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = history.map(h => {
+      const time = new Date(h.timestamp + 'Z').toLocaleString();
+      const statusColor = h.status === 'applied' || h.status === 'synced' ? 'var(--success)'
+                        : h.status === 'error' ? 'var(--danger)' : 'var(--muted)';
+      const txn = h.transaction_id
+        ? `<span style="font-family:monospace;color:var(--accent);font-size:11px;">${escHtml(h.transaction_id)}</span>
+           <button onclick="copyTxn('${escHtml(h.transaction_id)}')"
+             style="margin-left:4px;font-size:10px;padding:1px 5px;border:1px solid var(--border);
+                    border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;">copy</button>`
+        : `<span style="color:var(--muted);">—</span>`;
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 10px;color:var(--muted);font-size:11px;white-space:nowrap;">${time}</td>
+        <td style="padding:8px 10px;">${escHtml(h.action)}</td>
+        <td style="padding:8px 10px;font-weight:600;color:${statusColor};">${escHtml(h.status)}</td>
+        <td style="padding:8px 10px;">${txn}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-muted text-sm" style="padding:12px;">Failed: ${escHtml(e.message)}</td></tr>`;
+  }
 }
 
 function _updateDeviceSyncBadge(deviceId, status) {
@@ -2763,6 +3107,413 @@ async function submitIpamVlan() {
     showToast(e.message, 'error');
   }
 }
+
+// ════════════════════════════════════════════════
+// NED sync_state badge helper
+// ════════════════════════════════════════════════
+function _syncStateBadge(state) {
+  const map = {
+    'in-sync':     ['#0f2d1a','#3fb950','✓ in-sync'],
+    'out-of-sync': ['#3a1a0f','#f85149','✗ out-of-sync'],
+    'unknown':     ['#1a1a2a','#8b949e','? unknown'],
+  };
+  const [bg, color, label] = map[state] || map['unknown'];
+  return `<span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:${bg};color:${color};">${label}</span>`;
+}
+
+// NED ID auto-fill from device_type
+const _NED_TYPE_MAP = {
+  cisco_ios:       'cisco-ios-cli-1.0',
+  cisco_ios_xe:    'cisco-ios-cli-1.0',
+  cisco_nxos:      'cisco-nxos-cli-1.0',
+  cisco_xr:        'cisco-iosxr-cli-1.0',
+  arista_eos:      'arista-eos-cli-1.0',
+  juniper_junos:   'juniper-junos-cli-1.0',
+  fortinet:        'fortinet-fortios-cli-1.0',
+  paloalto_panos:  'paloalto-panos-cli-1.0',
+};
+function autoFillNedId(deviceType) {
+  const el = document.getElementById('dm-ned-id');
+  if (el) el.value = _NED_TYPE_MAP[deviceType] || '';
+}
+
+// ── Auth mode toggle (device modal) ──────────────────────────────────────────
+window._dmAuthMode = 'authgroup';
+
+function setAuthMode(mode) {
+  window._dmAuthMode = mode;
+  const agBtn     = document.getElementById('dm-auth-mode-ag');
+  const dirBtn    = document.getElementById('dm-auth-mode-direct');
+  const agSec     = document.getElementById('dm-authgroup-section');
+  const dirSec    = document.getElementById('dm-direct-section');
+  if (!agBtn) return;
+  if (mode === 'authgroup') {
+    agBtn.style.background  = 'var(--accent)';  agBtn.style.color  = '#fff';  agBtn.style.fontWeight = '600';
+    dirBtn.style.background = 'var(--card)';    dirBtn.style.color = 'var(--muted)'; dirBtn.style.fontWeight = '';
+    if (agSec)  agSec.style.display  = '';
+    if (dirSec) dirSec.style.display = 'none';
+  } else {
+    dirBtn.style.background = 'var(--accent)';  dirBtn.style.color  = '#fff'; dirBtn.style.fontWeight = '600';
+    agBtn.style.background  = 'var(--card)';    agBtn.style.color   = 'var(--muted)'; agBtn.style.fontWeight = '';
+    if (agSec)  agSec.style.display  = 'none';
+    if (dirSec) dirSec.style.display = '';
+  }
+}
+
+function _populateAuthgroupSelect(selectedName) {
+  const sel = document.getElementById('dm-authgroup-select');
+  const detail = document.getElementById('dm-authgroup-detail');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const groups = window._authgroupsCache || [];
+  if (!groups.length) {
+    // Always include "default" as fallback
+    sel.innerHTML = '<option value="default">default (no authgroups defined)</option>';
+    if (detail) detail.textContent = 'No authgroups yet — create one in NEDs & Authgroups';
+    return;
+  }
+  groups.forEach(ag => {
+    const opt = document.createElement('option');
+    opt.value = ag.name;
+    opt.textContent = `${ag.name}  (user: ${ag.default_username})`;
+    if (ag.name === (selectedName || 'default')) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => _updateAuthgroupDetail();
+  _updateAuthgroupDetail();
+}
+
+function _updateAuthgroupDetail() {
+  const sel = document.getElementById('dm-authgroup-select');
+  const detail = document.getElementById('dm-authgroup-detail');
+  if (!sel || !detail) return;
+  const groups = window._authgroupsCache || [];
+  const ag = groups.find(g => g.name === sel.value);
+  detail.textContent = ag ? `user: ${ag.default_username}  ·  ${ag.description || 'no description'}` : '';
+}
+
+// ════════════════════════════════════════════════
+// NSO-style sync-from / sync-to / compare-config
+// ════════════════════════════════════════════════
+let _compareDeviceId = null;
+
+async function doSyncFrom(deviceId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/sync-from`);
+    toast(`✅ sync-from: ${r.message}`, 'success');
+    // Update sync_state badge in device table
+    const cell = document.getElementById(`device-sync-status-${deviceId}`);
+    if (cell) cell.innerHTML = _syncStateBadge(r.sync_state || 'in-sync');
+    loadSync();
+  } catch(e) {
+    toast(`sync-from failed: ${e.message}`, 'error');
+  } finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function doSyncTo(deviceId, btn) {
+  if (!confirm('sync-to will push the stored config to the device. Continue?')) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/sync-to`);
+    if (r.status === 'in-sync') {
+      toast('✅ sync-to: device already matches orchestrator', 'success');
+    } else {
+      toast(`✅ sync-to applied: ${r.message}`, 'success');
+    }
+    const cell = document.getElementById(`device-sync-status-${deviceId}`);
+    if (cell) cell.innerHTML = _syncStateBadge(r.sync_state || 'in-sync');
+    loadSync();
+  } catch(e) {
+    toast(`sync-to failed: ${e.message}`, 'error');
+  } finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function doCompareConfig(deviceId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await api('POST', `/api/devices/${deviceId}/compare-config`);
+    _compareDeviceId = deviceId;
+
+    // Summary
+    const summaryEl = document.getElementById('compare-modal-summary');
+    const syncBadge = _syncStateBadge(r.sync_state);
+    summaryEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        ${syncBadge}
+        <span style="font-size:12px;color:var(--muted);">${escHtml(r.message)}</span>
+        ${r.added_lines ? `<span style="font-size:12px;color:var(--success);">+${r.added_lines} lines</span>` : ''}
+        ${r.removed_lines ? `<span style="font-size:12px;color:var(--danger);">-${r.removed_lines} lines</span>` : ''}
+      </div>`;
+
+    // Diff
+    const diffEl = document.getElementById('compare-modal-diff');
+    if (r.diff) {
+      diffEl.innerHTML = renderNedDiff(r.diff);
+    } else {
+      diffEl.innerHTML = '<span style="color:var(--muted);">No differences — device matches orchestrator.</span>';
+    }
+
+    // Show sync-to button if there are differences
+    const syncToBtn = document.getElementById('compare-sync-to-btn');
+    syncToBtn.style.display = r.diff ? '' : 'none';
+
+    document.getElementById('compare-modal-title').textContent =
+      `compare-config — ${r.sync_state}`;
+    document.getElementById('compare-modal').classList.remove('hidden');
+
+    // Update badge in device table
+    const cell = document.getElementById(`device-sync-status-${deviceId}`);
+    if (cell) cell.innerHTML = _syncStateBadge(r.sync_state);
+    loadSync();
+  } catch(e) {
+    toast(`compare-config failed: ${e.message}`, 'error');
+  } finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function doSyncToFromCompare() {
+  if (!_compareDeviceId) return;
+  document.getElementById('compare-modal').classList.add('hidden');
+  const rows = document.querySelectorAll(`#sync-row-${_compareDeviceId} button`);
+  const syncBtn = [...rows].find(b => b.textContent.includes('sync-to'));
+  if (syncBtn) { await doSyncTo(_compareDeviceId, syncBtn); }
+}
+
+function renderNedDiff(diff) {
+  return diff.split('\n').map(line => {
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      return `<span style="color:var(--muted);font-size:11px;">${escHtml(line)}</span>`;
+    } else if (line.startsWith('+')) {
+      return `<span style="background:rgba(63,185,80,.12);color:var(--success);display:block;">${escHtml(line)}</span>`;
+    } else if (line.startsWith('-')) {
+      return `<span style="background:rgba(248,81,73,.1);color:var(--danger);display:block;">${escHtml(line)}</span>`;
+    } else if (line.startsWith('@@')) {
+      return `<span style="color:var(--purple);font-size:11px;">${escHtml(line)}</span>`;
+    }
+    return `<span>${escHtml(line)}</span>`;
+  }).join('\n');
+}
+
+// ════════════════════════════════════════════════
+// Live Status (operational data)
+// ════════════════════════════════════════════════
+let _liveStatusDeviceId = null;
+
+async function openLiveStatus(deviceId, deviceName, nedId) {
+  _liveStatusDeviceId = deviceId;
+  document.getElementById('live-status-title').textContent = `Live Status — ${deviceName}`;
+  document.getElementById('live-status-ned').textContent = `NED: ${nedId}`;
+  document.getElementById('live-status-output').innerHTML =
+    '<span style="color:var(--muted);font-size:12px;">Select a category to pull live data from the device.</span>';
+
+  // Fetch NED capabilities to know which categories are available
+  const catsEl = document.getElementById('live-status-cats');
+  catsEl.innerHTML = '<span style="color:var(--muted);font-size:12px;">Loading categories…</span>';
+  document.getElementById('live-status-modal').classList.remove('hidden');
+
+  try {
+    // Get categories from the NED info endpoint
+    const info = await api('GET', `/api/devices/${deviceId}/ned-info`);
+    const cats = info.live_status_categories || [];
+    if (cats.length === 0) {
+      catsEl.innerHTML = '<span style="color:var(--muted);font-size:12px;">No live-status categories available for this NED.</span>';
+      return;
+    }
+    catsEl.innerHTML = cats.map(c => `
+      <button onclick="fetchLiveStatus(${deviceId},'${c}',this)"
+        style="padding:4px 12px;border:1px solid var(--border);border-radius:4px;
+               background:var(--bg);color:var(--muted);font-size:11px;cursor:pointer;
+               transition:all .15s;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"
+        data-cat="${c}">${c}</button>`).join('');
+  } catch(e) {
+    catsEl.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+  }
+}
+
+async function fetchLiveStatus(deviceId, category, btn) {
+  // Highlight active category
+  document.querySelectorAll('#live-status-cats button').forEach(b => {
+    b.style.background = 'var(--bg)';
+    b.style.color = 'var(--muted)';
+    b.style.borderColor = 'var(--border)';
+  });
+  btn.style.background = 'var(--accent-dim)';
+  btn.style.color = 'var(--accent)';
+  btn.style.borderColor = 'var(--accent)';
+
+  const out = document.getElementById('live-status-output');
+  out.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;"><div class="spinner"></div> Fetching live data…</div>';
+
+  try {
+    const r = await api('GET', `/api/devices/${deviceId}/live-status/${category}`);
+    const parts = Object.entries(r.data || {}).map(([cmd, output]) => `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;color:var(--accent);font-family:monospace;margin-bottom:6px;
+                    padding:4px 8px;background:var(--surface);border-radius:3px;display:inline-block;">$ ${escHtml(cmd)}</div>
+        <pre style="margin:0;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-all;">${escHtml(output)}</pre>
+      </div>`).join('');
+    out.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+        ${escHtml(r.device)} · ${escHtml(r.ned_id)} · ${new Date(r.timestamp+'Z').toLocaleTimeString()}
+      </div>
+      ${parts}`;
+  } catch(e) {
+    out.innerHTML = `<span style="color:var(--danger);font-size:12px;">Error: ${escHtml(e.message)}</span>`;
+  }
+}
+
+// ════════════════════════════════════════════════
+// NED Registry page
+// ════════════════════════════════════════════════
+async function loadNeds() {
+  // Load NED registry
+  const grid = document.getElementById('ned-registry-grid');
+  grid.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+  try {
+    const r = await api('GET', '/api/neds');
+    const neds = r.neds || [];
+    grid.innerHTML = neds.map(n => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:600;font-size:13px;font-family:monospace;color:var(--accent);">${escHtml(n.ned_id)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${escHtml(n.vendor)} · ${escHtml(n.platform)}</div>
+          </div>
+          <span style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;
+                       background:#1a2535;color:var(--accent);border:1px solid var(--accent-dim);">${escHtml(n.protocol)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">${escHtml(n.description)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          ${(n.capabilities||[]).map(c => `<span style="padding:1px 6px;border-radius:3px;font-size:10px;background:rgba(63,185,80,.1);color:var(--success);">${escHtml(c)}</span>`).join('')}
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+  }
+
+  // Load authgroups
+  loadAuthgroups();
+}
+
+// ════════════════════════════════════════════════
+// Authgroup CRUD
+// ════════════════════════════════════════════════
+async function loadAuthgroups() {
+  const el = document.getElementById('authgroup-list');
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+  try {
+    const groups = await api('GET', '/api/authgroups');
+    window._authgroupsCache = groups;  // cache for device modal dropdown
+    if (!groups.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:12px;">No authgroups yet. Create one to share credentials across devices.</div>';
+      return;
+    }
+    el.innerHTML = groups.map(g => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;
+                  display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${escHtml(g.name)}</div>
+          ${g.description ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">${escHtml(g.description)}</div>` : ''}
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+            username: <span style="font-family:monospace;">${escHtml(g.default_username)}</span>
+            · created ${new Date(g.created_at+'Z').toLocaleDateString()}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="openEditAuthgroupModal(${g.id},'${escHtml(g.name)}','${escHtml(g.description||'')}','${escHtml(g.default_username)}')">Edit</button>
+          <button class="btn btn-danger" style="font-size:11px;padding:4px 9px;"
+            onclick="deleteAuthgroup(${g.id})">Del</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--danger);font-size:12px;">${e.message}</span>`;
+  }
+}
+
+function openAuthgroupModal() {
+  document.getElementById('authgroup-modal-title').textContent = 'New Authgroup';
+  document.getElementById('ag-modal-id').value = '';
+  document.getElementById('ag-name').value = '';
+  document.getElementById('ag-description').value = '';
+  document.getElementById('ag-username').value = '';
+  document.getElementById('ag-password').value = '';
+  document.getElementById('ag-enable').value = '';
+  document.getElementById('ag-name').disabled = false;
+  document.getElementById('authgroup-modal').classList.remove('hidden');
+}
+
+function openEditAuthgroupModal(id, name, desc, username) {
+  document.getElementById('authgroup-modal-title').textContent = `Edit Authgroup: ${name}`;
+  document.getElementById('ag-modal-id').value = id;
+  document.getElementById('ag-name').value = name;
+  document.getElementById('ag-description').value = desc;
+  document.getElementById('ag-username').value = username;
+  document.getElementById('ag-password').value = '';
+  document.getElementById('ag-enable').value = '';
+  document.getElementById('ag-name').disabled = true; // name is immutable once created
+  document.getElementById('authgroup-modal').classList.remove('hidden');
+}
+
+function closeAuthgroupModal() {
+  document.getElementById('authgroup-modal').classList.add('hidden');
+}
+
+async function saveAuthgroup() {
+  const id = document.getElementById('ag-modal-id').value;
+  const payload = {
+    name:             document.getElementById('ag-name').value.trim(),
+    description:      document.getElementById('ag-description').value.trim(),
+    default_username: document.getElementById('ag-username').value.trim(),
+    password:         document.getElementById('ag-password').value,
+    enable_password:  document.getElementById('ag-enable').value || null,
+  };
+  if (!payload.name || !payload.default_username) {
+    toast('Name and username are required', 'error'); return;
+  }
+  try {
+    if (id) {
+      await api('PUT', `/api/authgroups/${id}`, {
+        description:    payload.description,
+        default_username: payload.default_username,
+        password:       payload.password || undefined,
+        enable_password: payload.enable_password,
+      });
+      toast(`Authgroup updated`, 'success');
+    } else {
+      await api('POST', '/api/authgroups', payload);
+      toast(`Authgroup '${payload.name}' created`, 'success');
+    }
+    closeAuthgroupModal();
+    loadAuthgroups();
+  } catch(e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteAuthgroup(id) {
+  if (!confirm('Delete this authgroup?')) return;
+  try {
+    await api('DELETE', `/api/authgroups/${id}`);
+    toast('Authgroup deleted', 'success');
+    loadAuthgroups();
+  } catch(e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// Device modal — NED ID field population
+// ════════════════════════════════════════════════
+const _origOpenDeviceModal = typeof openDeviceModal !== 'undefined' ? openDeviceModal : null;
+
+// Patch saveDevice to include ned_id and authgroup
+const _origSaveDevice = typeof saveDevice !== 'undefined' ? saveDevice : null;
 
 // ════════════════════════════════════════════════
 // Boot

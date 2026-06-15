@@ -137,6 +137,72 @@ if not col_exists("sync_history", "transaction_id"):
 else:
     print("✓ sync_history.transaction_id already exists")
 
+
+# ── 5. authgroups table (NED authgroup support) ───────────────────────────────
+if not table_exists("authgroups"):
+    execute("""
+        CREATE TABLE authgroups (
+            id                 SERIAL PRIMARY KEY,
+            user_id            INTEGER NOT NULL REFERENCES users(id),
+            name               TEXT    NOT NULL,
+            description        TEXT    DEFAULT '',
+            default_username   TEXT    NOT NULL,
+            encrypted_password TEXT    NOT NULL,
+            enable_password    TEXT,
+            created_at         TIMESTAMP DEFAULT NOW(),
+            updated_at         TIMESTAMP DEFAULT NOW()
+        )
+    """, "authgroups table created")
+    execute("CREATE INDEX IF NOT EXISTS ix_authgroups_user_id ON authgroups(user_id)",
+            "Index on authgroups.user_id")
+else:
+    print("✓ authgroups table already exists")
+
+# ── 6. devices.ned_id column ─────────────────────────────────────────────────
+if not col_exists("devices", "ned_id"):
+    execute("ALTER TABLE devices ADD COLUMN ned_id TEXT",
+            "Added devices.ned_id column")
+    # Back-fill ned_id from device_type for existing rows
+    execute("""
+        UPDATE devices SET ned_id = CASE
+            WHEN device_type IN ('cisco_ios', 'cisco_ios_xe') THEN 'cisco-ios-cli-1.0'
+            WHEN device_type = 'fortinet'                     THEN 'fortinet-fortios-cli-1.0'
+            ELSE NULL
+        END
+    """, "Back-filled ned_id from device_type for existing devices")
+    execute("CREATE INDEX IF NOT EXISTS ix_devices_ned_id ON devices(ned_id)",
+            "Index on devices.ned_id")
+else:
+    print("✓ devices.ned_id already exists")
+
+# ── 7. devices.authgroup column ───────────────────────────────────────────────
+if not col_exists("devices", "authgroup"):
+    execute("ALTER TABLE devices ADD COLUMN authgroup TEXT DEFAULT 'default'",
+            "Added devices.authgroup column")
+else:
+    print("✓ devices.authgroup already exists")
+
+# ── 8. devices.authgroup_id column ───────────────────────────────────────────
+if not col_exists("devices", "authgroup_id"):
+    execute("ALTER TABLE devices ADD COLUMN authgroup_id INTEGER REFERENCES authgroups(id)",
+            "Added devices.authgroup_id column")
+else:
+    print("✓ devices.authgroup_id already exists")
+
+# ── 9. devices.sync_state column ─────────────────────────────────────────────
+if not col_exists("devices", "sync_state"):
+    execute("ALTER TABLE devices ADD COLUMN sync_state TEXT DEFAULT 'unknown'",
+            "Added devices.sync_state column")
+else:
+    print("✓ devices.sync_state already exists")
+
+# ── 10. devices.platform column ──────────────────────────────────────────────
+if not col_exists("devices", "platform"):
+    execute("ALTER TABLE devices ADD COLUMN platform TEXT",
+            "Added devices.platform column")
+else:
+    print("✓ devices.platform already exists")
+
 commit()
 close()
 print("\nMigration complete.")

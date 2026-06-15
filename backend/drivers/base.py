@@ -1,10 +1,22 @@
 """
-base.py — Abstract base class for all network device drivers.
+base.py — Abstract base class for all network device drivers (NEDs).
 
-To add a new vendor:
+Inspired by Cisco NSO's NED (Network Element Driver) architecture.
+Each driver is a NED — it owns the protocol conversation with one vendor/platform.
+
+NED concepts implemented here:
+  - NED_ID        unique identity e.g. "cisco-ios-cli-6.115"
+  - NED_VERSION   semver-style version string
+  - PROTOCOL      transport: "cli" | "netconf" | "restconf"
+  - CAPABILITIES  feature flags the NED supports
+  - live_status_commands()  operational (non-config) data — separate from config
+  - rollback_command()      native device rollback if supported
+
+To add a new vendor NED:
   1. Create backend/drivers/<vendor>.py
-  2. Subclass BaseDriver and implement all abstract methods
-  3. Register it in backend/drivers/__init__.py
+  2. Subclass BaseDriver, set NED_ID / NED_VERSION / PROTOCOL / CAPABILITIES
+  3. Implement all abstract methods
+  4. Register it in backend/drivers/__init__.py
 """
 
 from abc import ABC, abstractmethod
@@ -13,19 +25,40 @@ from typing import Optional
 
 class BaseDriver(ABC):
     """
-    Every vendor driver must implement these methods.
+    Every vendor NED must implement these methods.
     The core orchestrator calls only this interface — never vendor-specific code.
     """
 
-    # Subclasses must set this to the Netmiko device_type string
+    # ── NED Identity (set in each subclass) ──────────────────────────────
+    NED_ID: str = ""          # e.g. "cisco-ios-cli-6.115"
+    NED_VERSION: str = ""     # e.g. "6.115"
+    PROTOCOL: str = "cli"     # "cli" | "netconf" | "restconf"
+
+    # Feature flags — declare what this NED supports.
+    # Common values: "rollback", "commit-queue", "live-status",
+    #                "check-sync", "config-backup", "interface-list",
+    #                "candidate-config"
+    CAPABILITIES: tuple[str, ...] = ()
+
+    # Netmiko device_type (CLI NEDs only)
     NETMIKO_DEVICE_TYPE: str = ""
 
-    # Subclasses define commands per analysis type
+    # Config commands by analysis type (pulled and stored/diffed)
     COMMANDS: dict[str, list[str]] = {}
 
-    # ──────────────────────────────────────────────
-    # Connection helpers
-    # ──────────────────────────────────────────────
+    # Live-status (operational) commands — output is NOT configuration.
+    # These pull real-time data: BGP sessions, interface counters, ARP tables.
+    # Kept separate from COMMANDS so the orchestrator never diffs them like config.
+    #
+    # Keys are human-readable categories; values are CLI command lists.
+    # Example:
+    #   "bgp":        ["show bgp summary"],
+    #   "interfaces": ["show interfaces"],
+    #   "arp":        ["show arp"],
+    #   "routes":     ["show ip route"],
+    LIVE_STATUS_COMMANDS: dict[str, list[str]] = {}
+
+    # ── Connection helpers ────────────────────────────────────────────────
 
     def get_connection_params(
         self,
@@ -53,12 +86,47 @@ class BaseDriver(ABC):
         }
 
     def get_commands(self, analysis_type: str) -> list[str]:
-        """Return the command list for the given analysis type."""
+        """Return config command list for the given analysis type."""
         return self.COMMANDS.get(analysis_type, self.COMMANDS.get("status", []))
 
-    # ──────────────────────────────────────────────
-    # Abstract interface — must be implemented
-    # ──────────────────────────────────────────────
+    def get_live_status_commands(self, category: str) -> list[str]:
+        """
+        Return operational command list for the given category.
+        Returns empty list if category not supported by this NED.
+        """
+        return self.LIVE_STATUS_COMMANDS.get(category, [])
+
+    def get_live_status_categories(self) -> list[str]:
+        """Return all operational data categories this NED supports."""
+        return list(self.LIVE_STATUS_COMMANDS.keys())
+
+    def supports(self, capability: str) -> bool:
+        """Check if this NED supports a given capability."""
+        return capability in self.CAPABILITIES
+
+    def ned_info(self) -> dict:
+        """Return NED identity as a dict (for API responses)."""
+        return {
+            "ned_id": self.NED_ID,
+            "version": self.NED_VERSION,
+            "protocol": self.PROTOCOL,
+            "capabilities": list(self.CAPABILITIES),
+            "live_status_categories": self.get_live_status_categories(),
+        }
+
+    # ── Rollback support ──────────────────────────────────────────────────
+
+    def rollback_command(self) -> Optional[str]:
+        """
+        Return a CLI command to roll back the last config change natively on
+        the device (e.g. 'rollback configuration last 1' on IOS-XR).
+
+        Return None if the device has no native rollback — the orchestrator
+        will fall back to snapshot-based restore instead.
+        """
+        return None
+
+    # ── Abstract interface — must be implemented ──────────────────────────
 
     @abstractmethod
     def test_command(self) -> str:
