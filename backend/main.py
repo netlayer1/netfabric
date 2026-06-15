@@ -327,10 +327,9 @@ def add_device(
         ).first()
         if ag:
             ag_id = ag.id
-            # Placeholder so column is non-null; _resolve_device_credentials ignores it
-            stored_username = stored_username or ag.default_username
-            if payload.password in ("__authgroup__", "", None):
-                stored_password = "__authgroup__"
+            # Always use authgroup's username; device.username is just a display fallback
+            stored_username = ag.default_username
+            stored_password = "__authgroup__"
 
     device = Device(
         user_id=current_user.id,
@@ -378,10 +377,6 @@ def update_device(
         device.host = payload.host
     if payload.port is not None:
         device.port = payload.port
-    if payload.username is not None:
-        device.username = payload.username
-    if payload.password is not None:
-        device.encrypted_password = encrypt_password(payload.password)
     if payload.device_type is not None:
         device.device_type = payload.device_type
         # Re-resolve ned_id when device_type changes
@@ -397,7 +392,26 @@ def update_device(
                 Authgroup.user_id == current_user.id,
                 Authgroup.name == payload.authgroup,
             ).first()
-            device.authgroup_id = ag.id if ag else None
+            if ag:
+                device.authgroup_id = ag.id
+                # Store authgroup's username so display is accurate
+                device.username = ag.default_username
+                device.encrypted_password = encrypt_password("__authgroup__")
+            else:
+                device.authgroup_id = None
+        else:
+            device.authgroup_id = None
+            # Switching back to per-device — update credentials if provided
+            if payload.username is not None:
+                device.username = payload.username
+            if payload.password is not None and payload.password not in ("__authgroup__", ""):
+                device.encrypted_password = encrypt_password(payload.password)
+    else:
+        # No authgroup change — update per-device credentials if provided
+        if payload.username is not None:
+            device.username = payload.username
+        if payload.password is not None and payload.password not in ("__authgroup__", ""):
+            device.encrypted_password = encrypt_password(payload.password)
         else:
             device.authgroup_id = None
     if payload.site is not None:

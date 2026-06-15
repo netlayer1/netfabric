@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.auth import get_current_user, decrypt_password
-from backend.models import User, Device
+from backend.models import User, Device, Authgroup
 from backend.lld_models import (
     LLDTemplate, LLDCheckHistory,
     LLDTemplateCreate, LLDTemplateUpdate, LLDTemplateResponse,
@@ -41,6 +41,21 @@ router = APIRouter(prefix="/api/lld", tags=["lld"])
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
+
+def _resolve_credentials(device: Device, db: Session) -> tuple[str, str]:
+    """Return (username, plaintext_password) — authgroup takes priority over per-device creds."""
+    if device.authgroup_id:
+        ag = db.query(Authgroup).filter(Authgroup.id == device.authgroup_id).first()
+        if ag:
+            return ag.default_username, decrypt_password(ag.encrypted_password)
+    if device.authgroup and device.authgroup not in ("", "default", "__authgroup__"):
+        ag = db.query(Authgroup).filter(
+            Authgroup.user_id == device.user_id,
+            Authgroup.name == device.authgroup,
+        ).first()
+        if ag:
+            return ag.default_username, decrypt_password(ag.encrypted_password)
+    return device.username, decrypt_password(device.encrypted_password)
 
 def _get_template(template_id: int, user_id: int, db: Session) -> LLDTemplate:
     t = db.query(LLDTemplate).filter(
@@ -146,11 +161,11 @@ def run_compliance_check(
     template = _get_template(template_id, current_user.id, db)
     device   = _get_device(device_id, current_user.id, db)
 
-    # Pull running config from device
-    plain_password = decrypt_password(device.encrypted_password)
+    # Pull running config from device — resolve credentials via authgroup if set
+    username, plain_password = _resolve_credentials(device, db)
     pull = device_connector.pull_device_data(
         host=device.host,
-        username=device.username,
+        username=username,
         password=plain_password,
         device_type=device.device_type,
         port=device.port,

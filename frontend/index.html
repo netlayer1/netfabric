@@ -1593,8 +1593,8 @@ async function saveDevice() {
     payload.username = document.getElementById('dm-username')?.value.trim() || '';
     payload.password = document.getElementById('dm-password')?.value || '';
   } else {
-    // Placeholder values — backend will use authgroup credentials
-    payload.username = agSelect?.value || 'default';
+    // Backend will use authgroup credentials; send safe placeholders
+    payload.username = 'authgroup';
     payload.password = '__authgroup__';
   }
 
