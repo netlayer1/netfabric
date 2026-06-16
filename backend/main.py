@@ -65,6 +65,7 @@ from backend.models import (
     UserCreate, UserResponse, TokenResponse,
     DeviceCreate, DeviceUpdate, DeviceResponse,
     AuthgroupCreate, AuthgroupUpdate, AuthgroupResponse,
+    DeviceGroupCreate, DeviceGroupUpdate, DeviceGroupResponse,
     AnalysisRequest, AnalysisResponse,
     ConfigSnapshotResponse, SyncHistoryResponse, CheckSyncResponse,
     ApplyConfigRequest, ApplyConfigResponse,
@@ -246,6 +247,73 @@ def delete_authgroup(
     db.commit()
 
 
+# ─────────────────────────────────────────────
+# Device Group Routes
+# ─────────────────────────────────────────────
+
+@app.get("/api/device-groups", response_model=List[DeviceGroupResponse])
+def list_device_groups(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return db.query(DeviceGroup).filter(DeviceGroup.user_id == current_user.id).all()
+
+
+@app.post("/api/device-groups", response_model=DeviceGroupResponse, status_code=201)
+def create_device_group(
+    payload: DeviceGroupCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    group = DeviceGroup(
+        user_id=current_user.id,
+        name=payload.name,
+        description=payload.description,
+    )
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@app.put("/api/device-groups/{group_id}", response_model=DeviceGroupResponse)
+def update_device_group(
+    group_id: int,
+    payload: DeviceGroupUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    group = db.query(DeviceGroup).filter(
+        DeviceGroup.id == group_id,
+        DeviceGroup.user_id == current_user.id,
+    ).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Device group not found")
+    if payload.name is not None:
+        group.name = payload.name
+    if payload.description is not None:
+        group.description = payload.description
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@app.delete("/api/device-groups/{group_id}", status_code=204)
+def delete_device_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    group = db.query(DeviceGroup).filter(
+        DeviceGroup.id == group_id,
+        DeviceGroup.user_id == current_user.id,
+    ).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Device group not found")
+    db.delete(group)
+    db.commit()
+
+
 @app.get("/")
 def serve_frontend():
     if os.path.exists("frontend/index.html"):
@@ -344,6 +412,7 @@ def add_device(
         authgroup_id=ag_id,
         sync_state="unknown",
         site=payload.site,
+        group_id=payload.group_id,
     )
     db.add(device)
     db.commit()
@@ -416,6 +485,8 @@ def update_device(
             device.authgroup_id = None
     if payload.site is not None:
         device.site = payload.site
+    if payload.group_id is not None:
+        device.group_id = payload.group_id
 
     db.commit()
     db.refresh(device)

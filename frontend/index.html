@@ -159,6 +159,32 @@
     .nav-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
     .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
     .nav-item svg { flex-shrink: 0; }
+    /* Devices dropdown */
+    .nav-group { position: relative; }
+    .nav-group-header {
+      display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+      cursor: pointer; color: var(--muted); font-size: 13px;
+      transition: background .15s, color .15s; white-space: nowrap;
+      border-left: 3px solid transparent; justify-content: space-between;
+    }
+    .nav-group-header:hover { background: rgba(88,166,255,.07); color: var(--text); }
+    .nav-group-header.open { color: var(--text); }
+    .nav-group-header .nav-group-left { display: flex; align-items: center; gap: 10px; }
+    .nav-group-header svg { flex-shrink: 0; }
+    .nav-group-chevron { transition: transform .2s; }
+    .nav-group-header.open .nav-group-chevron { transform: rotate(90deg); }
+    .nav-sub { overflow: hidden; max-height: 0; transition: max-height .2s ease; }
+    .nav-sub.open { max-height: 200px; }
+    .nav-sub-item {
+      display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 38px;
+      cursor: pointer; color: var(--muted); font-size: 12px;
+      transition: background .15s, color .15s; white-space: nowrap;
+      border-left: 3px solid transparent;
+    }
+    .nav-sub-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
+    .nav-sub-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
+    .sidebar.collapsed .nav-group-chevron { display: none; }
+    .sidebar.collapsed .nav-sub { display: none; }
     .sidebar-footer { margin-top: auto; padding: 10px 8px; border-top: 1px solid var(--border); }
     .user-info { font-size: 11px; color: var(--muted); margin-bottom: 6px; word-break: break-all; padding: 0 6px; }
 
@@ -311,9 +337,23 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span class="nav-label">Home</span>
         </div>
-        <div class="nav-item" data-page="devices" onclick="showPage('devices')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-          <span class="nav-label">Devices</span>
+        <!-- Devices dropdown -->
+        <div class="nav-group" id="nav-group-devices">
+          <div class="nav-group-header" id="nav-group-devices-header" onclick="toggleNavGroup('devices')">
+            <div class="nav-group-left">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <span class="nav-label">Devices</span>
+            </div>
+            <svg class="nav-group-chevron nav-label" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="nav-sub" id="nav-sub-devices">
+            <div class="nav-sub-item" data-page="devices" onclick="showPage('devices')">Device management</div>
+            <div class="nav-sub-item" data-page="device-groups" onclick="showPage('device-groups')">Device groups</div>
+          </div>
+        </div>
+        <div class="nav-item" data-page="neds" onclick="showPage('neds')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+          <span class="nav-label">NEDs &amp; Authgroups</span>
         </div>
         <div class="nav-item" data-page="services" onclick="showPage('services')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -330,10 +370,6 @@
         <div class="nav-item" data-page="lld" onclick="showPage('lld')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           <span class="nav-label">LLD Compliance</span>
-        </div>
-        <div class="nav-item" data-page="neds" onclick="showPage('neds')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
-          <span class="nav-label">NEDs & Authgroups</span>
         </div>
       </nav>
 
@@ -582,6 +618,41 @@
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- Device Groups Page                            -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="page-device-groups" class="hidden">
+        <div class="page-header">
+          <h2>Device Groups</h2>
+          <button class="btn btn-primary" style="font-size:12px;" onclick="openDeviceGroupModal()">+ New Group</button>
+        </div>
+        <div style="padding:24px 28px;">
+          <div id="device-group-list" style="display:grid;gap:10px;max-width:700px;">
+            <div style="color:var(--muted);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Device Group Modal -->
+      <div id="device-group-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeDeviceGroupModal()">
+        <div class="modal" style="max-width:420px;width:95vw;">
+          <h3 id="dg-modal-title">New Device Group</h3>
+          <input type="hidden" id="dg-modal-id" value="" />
+          <div class="form-group">
+            <label>Group Name</label>
+            <input type="text" id="dg-name" placeholder="core, edge, datacenter…" />
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="dg-description" placeholder="Optional description" />
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeDeviceGroupModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveDeviceGroup()">Save</button>
+          </div>
         </div>
       </div>
 
@@ -851,9 +922,17 @@
         <input type="text" id="dm-ned-id" placeholder="auto-detected" style="font-family:monospace;font-size:12px;" />
       </div>
     </div>
-    <div class="form-group">
-      <label>Site / Location</label>
-      <input type="text" id="dm-site" placeholder="HQ, Branch-1..." />
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label>Site / Location</label>
+        <input type="text" id="dm-site" placeholder="HQ, Branch-1..." />
+      </div>
+      <div class="form-group">
+        <label>Device Group</label>
+        <select id="dm-group-id">
+          <option value="">— None —</option>
+        </select>
+      </div>
     </div>
 
     <div class="modal-footer">
@@ -1317,19 +1396,40 @@ async function initApp() {
 function showPage(page) {
   currentPage = page;
   document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'));
+  // Update flat nav-item active state
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.page === page);
   });
+  // Update sub-item active state
+  document.querySelectorAll('.nav-sub-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+  // Auto-open Devices group if a Devices sub-page is active
+  const devicesSubPages = ['devices', 'device-groups'];
+  if (devicesSubPages.includes(page)) {
+    const header = document.getElementById('nav-group-devices-header');
+    const sub = document.getElementById('nav-sub-devices');
+    if (header && sub) { header.classList.add('open'); sub.classList.add('open'); }
+  }
   const pageEl = document.getElementById(`page-${page}`);
   if (pageEl) pageEl.classList.remove('hidden');
 
-  if (page === 'dashboard') loadDashboard();
-  if (page === 'devices')   loadDevices();
-  if (page === 'services')  loadServices();
-  if (page === 'sync')      loadSync();
-  if (page === 'ipam')      loadIpam();
-  if (page === 'lld')       loadLldTemplates();
-  if (page === 'neds')      loadNeds();
+  if (page === 'dashboard')    loadDashboard();
+  if (page === 'devices')      loadDevices();
+  if (page === 'device-groups') loadDeviceGroups();
+  if (page === 'services')     loadServices();
+  if (page === 'sync')         loadSync();
+  if (page === 'ipam')         loadIpam();
+  if (page === 'lld')          loadLldTemplates();
+  if (page === 'neds')         loadNeds();
+}
+
+function toggleNavGroup(group) {
+  const header = document.getElementById(`nav-group-${group}-header`);
+  const sub = document.getElementById(`nav-sub-${group}`);
+  if (!header || !sub) return;
+  const isOpen = header.classList.toggle('open');
+  sub.classList.toggle('open', isOpen);
 }
 
 function toggleSidebar() {
@@ -1362,7 +1462,10 @@ async function loadDevices() {
   const wrap = document.getElementById('devices-grid');
   wrap.innerHTML = '<div class="text-muted text-sm" style="padding:20px;">Loading...</div>';
   try {
-    devices = await api('GET', '/api/devices');
+    [devices, window.deviceGroups] = await Promise.all([
+      api('GET', '/api/devices'),
+      api('GET', '/api/device-groups').catch(() => []),
+    ]);
     renderDeviceTable(devices);
   } catch(e) { toast('Failed to load devices', 'error'); }
 }
@@ -1382,6 +1485,7 @@ const _THEAD = `<thead>
     <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Address</th>
     <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Port</th>
     <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Type</th>
+    <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Device Group</th>
     <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Status</th>
     <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Ping</th>
     <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Connect</th>
@@ -1451,6 +1555,9 @@ function renderDeviceRow(d) {
         </span>
         ${d.authgroup ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">auth: ${escHtml(d.authgroup)}</div>` : ''}
       </td>
+      <td style="padding:10px 14px;color:var(--muted);font-size:12px;">
+        ${d.group_id ? escHtml((window.deviceGroups||[]).find(g=>g.id===d.group_id)?.name || `#${d.group_id}`) : '<span style="color:var(--border)">—</span>'}
+      </td>
       <td style="padding:10px 6px;text-align:center;" id="device-sync-status-${d.id}">
         ${_syncStateBadge(d.sync_state || 'unknown')}
       </td>
@@ -1517,6 +1624,14 @@ async function deleteDevice(id) {
 }
 
 // Device Modal
+function _populateGroupSelect(selectedId) {
+  const sel = document.getElementById('dm-group-id');
+  if (!sel) return;
+  const groups = window.deviceGroups || [];
+  sel.innerHTML = '<option value="">— None —</option>' +
+    groups.map(g => `<option value="${g.id}" ${g.id == selectedId ? 'selected' : ''}>${escHtml(g.name)}</option>`).join('');
+}
+
 function openAddDeviceModal() {
   document.getElementById('device-modal-title').textContent = 'Add Device';
   document.getElementById('device-modal-id').value = '';
@@ -1529,6 +1644,7 @@ function openAddDeviceModal() {
   document.getElementById('dm-test-btn').style.display = 'none';
   document.getElementById('dm-save-btn').textContent = 'Add Device';
   _populateAuthgroupSelect(null);
+  _populateGroupSelect(null);
   setAuthMode('authgroup');
   document.getElementById('device-modal').classList.remove('hidden');
 }
@@ -1546,6 +1662,7 @@ function openEditDeviceModal(deviceId) {
   document.getElementById('dm-device-type').value = d.device_type;
   if (document.getElementById('dm-ned-id')) document.getElementById('dm-ned-id').value = d.ned_id || '';
   document.getElementById('dm-site').value = d.site || '';
+  _populateGroupSelect(d.group_id || null);
   document.getElementById('dm-test-btn').style.display = 'inline-flex';
   document.getElementById('dm-save-btn').textContent = 'Save Changes';
   // Determine auth mode: if device has an authgroup name use that, else per-device
@@ -1588,6 +1705,7 @@ async function saveDevice() {
     ned_id:      document.getElementById('dm-ned-id')?.value.trim() || null,
     authgroup:   usingAuthgroup ? (agSelect?.value || 'default') : null,
     site:        document.getElementById('dm-site').value.trim(),
+    group_id:    parseInt(document.getElementById('dm-group-id')?.value) || null,
   };
   if (!usingAuthgroup) {
     payload.username = document.getElementById('dm-username')?.value.trim() || '';
@@ -3398,6 +3516,90 @@ async function loadNeds() {
 
   // Load authgroups
   loadAuthgroups();
+}
+
+// ════════════════════════════════════════════════
+// Device Groups CRUD
+// ════════════════════════════════════════════════
+async function loadDeviceGroups() {
+  const el = document.getElementById('device-group-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;">Loading…</div>';
+  try {
+    const groups = await api('GET', '/api/device-groups');
+    if (!groups || groups.length === 0) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;">No device groups yet.</div>';
+      return;
+    }
+    el.innerHTML = groups.map(g => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${escHtml(g.name)}</div>
+          ${g.description ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">${escHtml(g.description)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
+            onclick="openEditDeviceGroupModal(${g.id},'${escHtml(g.name)}','${escHtml(g.description||'')}')">Edit</button>
+          <button class="btn btn-danger" style="font-size:11px;padding:4px 9px;"
+            onclick="deleteDeviceGroup(${g.id})">Del</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:13px;">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function openDeviceGroupModal() {
+  document.getElementById('dg-modal-title').textContent = 'New Device Group';
+  document.getElementById('dg-modal-id').value = '';
+  document.getElementById('dg-name').value = '';
+  document.getElementById('dg-description').value = '';
+  document.getElementById('device-group-modal').classList.remove('hidden');
+}
+
+function openEditDeviceGroupModal(id, name, desc) {
+  document.getElementById('dg-modal-title').textContent = `Edit Group: ${name}`;
+  document.getElementById('dg-modal-id').value = id;
+  document.getElementById('dg-name').value = name;
+  document.getElementById('dg-description').value = desc;
+  document.getElementById('device-group-modal').classList.remove('hidden');
+}
+
+function closeDeviceGroupModal() {
+  document.getElementById('device-group-modal').classList.add('hidden');
+}
+
+async function saveDeviceGroup() {
+  const id = document.getElementById('dg-modal-id').value;
+  const payload = {
+    name: document.getElementById('dg-name').value.trim(),
+    description: document.getElementById('dg-description').value.trim(),
+  };
+  if (!payload.name) { toast('Name is required', 'error'); return; }
+  try {
+    if (id) {
+      await api('PUT', `/api/device-groups/${id}`, payload);
+      toast('Group updated', 'success');
+    } else {
+      await api('POST', '/api/device-groups', payload);
+      toast(`Group '${payload.name}' created`, 'success');
+    }
+    closeDeviceGroupModal();
+    loadDeviceGroups();
+  } catch(e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteDeviceGroup(id) {
+  if (!confirm('Delete this device group?')) return;
+  try {
+    await api('DELETE', `/api/device-groups/${id}`);
+    toast('Group deleted', 'success');
+    loadDeviceGroups();
+  } catch(e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
 }
 
 // ════════════════════════════════════════════════

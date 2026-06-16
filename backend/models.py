@@ -194,6 +194,7 @@ class DeviceCreate(BaseModel):
     ned_id: Optional[str] = None        # e.g. "cisco-ios-cli-6.115"
     authgroup: Optional[str] = "default"
     site: str = ""
+    group_id: Optional[int] = None
 
 
 class DeviceUpdate(BaseModel):
@@ -206,6 +207,7 @@ class DeviceUpdate(BaseModel):
     ned_id: Optional[str] = None
     authgroup: Optional[str] = None
     site: Optional[str] = None
+    group_id: Optional[int] = None
 
 
 class DeviceResponse(BaseModel):
@@ -220,6 +222,7 @@ class DeviceResponse(BaseModel):
     sync_state: str = "unknown"
     platform: Optional[str] = None
     site: str
+    group_id: Optional[int] = None
     created_at: datetime
     last_seen: Optional[datetime]
 
@@ -249,6 +252,26 @@ class AuthgroupResponse(BaseModel):
     name: str
     description: str
     default_username: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── DeviceGroup Schemas ───────────────────────────────────────────────────────
+
+class DeviceGroupCreate(BaseModel):
+    name: str
+    description: str = ""
+
+class DeviceGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class DeviceGroupResponse(BaseModel):
+    id: int
+    name: str
+    description: str
     created_at: datetime
 
     class Config:
