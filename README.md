@@ -29,8 +29,8 @@ AI-powered network management platform for MSPs and network engineers. Connect t
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/network-ai-orchestrator.git
-cd network-ai-orchestrator
+git clone https://github.com/bashar1aziz/network-orchestrator.git
+cd network-orchestrator
 
 python3.9 -m venv venv
 source venv/bin/activate
