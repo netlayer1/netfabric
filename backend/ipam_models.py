@@ -14,7 +14,7 @@ Tables:
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from pydantic import BaseModel, field_validator
 import ipaddress
 
@@ -101,10 +101,12 @@ class Subnet(Base):
     site        = Column(String, default="")
     description = Column(String, default="")
     vlan_id     = Column(Integer, ForeignKey("ipam_vlans.id"), nullable=True)
+    parent_id   = Column(Integer, ForeignKey("ipam_subnets.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
     vlan      = relationship("Vlan", back_populates="subnets")
     addresses = relationship("IPAddress", back_populates="subnet", cascade="all, delete")
+    children  = relationship("Subnet", backref=backref("parent", remote_side="Subnet.id"))
 
 
 class IPAddress(Base):
@@ -136,6 +138,7 @@ class VlanCreate(BaseModel):
     name: str
     description: str = ""
     site: str = ""
+    vlan_group_id: Optional[int] = None
 
     @field_validator("vlan_id")
     @classmethod
@@ -150,6 +153,7 @@ class VlanUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     site: Optional[str] = None
+    vlan_group_id: Optional[int] = None
 
 
 class VlanResponse(BaseModel):
@@ -158,6 +162,7 @@ class VlanResponse(BaseModel):
     name: str
     description: str
     site: str
+    vlan_group_id: Optional[int]
     created_at: datetime
 
     class Config:
@@ -188,6 +193,7 @@ class SubnetUpdate(BaseModel):
     site: Optional[str] = None
     description: Optional[str] = None
     vlan_id: Optional[int] = None
+    parent_id: Optional[int] = None
 
 
 class SubnetResponse(BaseModel):
@@ -197,6 +203,7 @@ class SubnetResponse(BaseModel):
     site: str
     description: str
     vlan_id: Optional[int]
+    parent_id: Optional[int]
     created_at: datetime
 
     class Config:
@@ -243,6 +250,7 @@ class IPAddressCreate(BaseModel):
 
 
 class IPAddressUpdate(BaseModel):
+    address: Optional[str] = None
     status: Optional[str] = None
     hostname: Optional[str] = None
     device_id: Optional[int] = None

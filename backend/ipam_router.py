@@ -202,6 +202,27 @@ def create_subnet(
 
     data = payload.model_dump()
     data["network"] = canonical
+
+    # Auto-detect tightest containing parent in same VRF
+    new_net = ipaddress.ip_network(canonical)
+    candidates = db.query(Subnet).filter(
+        Subnet.user_id == current_user.id,
+        Subnet.vrf == payload.vrf,
+        Subnet.id != None,
+    ).all()
+    best_parent = None
+    best_prefix = -1
+    for c in candidates:
+        try:
+            c_net = ipaddress.ip_network(c.network)
+            if new_net.subnet_of(c_net) and new_net != c_net:
+                if c_net.prefixlen > best_prefix:
+                    best_prefix = c_net.prefixlen
+                    best_parent = c
+        except (ValueError, TypeError):
+            pass
+    data["parent_id"] = best_parent.id if best_parent else None
+
     s = Subnet(user_id=current_user.id, **data)
     db.add(s)
     db.commit()

@@ -8,8 +8,19 @@ Legacy SHA1 KEX algorithms are re-enabled globally in device_connector.py
 for older FortiGate firmware that doesn't support modern algorithms.
 """
 
+import re
 from typing import Optional
 from .base import BaseDriver
+
+# Lines FortiOS regenerates on every export — always volatile, never meaningful diffs
+_VOLATILE = re.compile(
+    r"^\s*(set \S*password\S* ENC\s"       # any *-password ENC field
+    r"|set (private-key|certificate) ENC\s"
+    r"|set (private-key|certificate) \"-----BEGIN )"
+    r"|^[-A-Za-z0-9+/=]{40,}$"            # bare base64 lines inside key/cert blocks
+    r'|^-----(?:BEGIN|END) ',
+    re.IGNORECASE,
+)
 
 
 class FortiGateDriver(BaseDriver):
@@ -76,6 +87,30 @@ class FortiGateDriver(BaseDriver):
 
     def interfaces_command(self) -> str:
         return "get system interface"
+
+    def normalize_for_diff(self, config: str) -> str:
+        """Strip volatile auto-generated lines before diffing.
+
+        FortiOS re-encrypts ENC passwords, SAE passwords, and SSL certificates
+        on every config export. These lines are meaningless for sync checks.
+        """
+        out = []
+        skip_block = False  # True while inside a multi-line key/cert value
+        for line in config.splitlines():
+            stripped = line.strip()
+            # Start of a multi-line private-key or certificate block
+            if re.match(r'^\s*set (private-key|certificate) "', line, re.IGNORECASE):
+                skip_block = True
+                continue
+            # End of multi-line block (closing quote on its own line)
+            if skip_block:
+                if stripped == '"':
+                    skip_block = False
+                continue
+            if _VOLATILE.match(line):
+                continue
+            out.append(line)
+        return "\n".join(out)
 
     def parse_interface_names(self, raw_output: str) -> list[str]:
         """

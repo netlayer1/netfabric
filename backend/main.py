@@ -722,11 +722,19 @@ def check_sync(
         db.commit()
         raise
 
+    # Strip volatile auto-generated lines (ENC passwords, certs) before diffing
+    driver = get_driver(device.device_type)
+    if hasattr(driver, "normalize_for_diff"):
+        snap_config = driver.normalize_for_diff(snap.config)
+        live_config  = driver.normalize_for_diff(live_config)
+    else:
+        snap_config = snap.config
+
     def _norm(c):
         return [l.rstrip() + "\n" for l in c.splitlines() if l.strip()]
 
     diff_lines = list(difflib.unified_diff(
-        _norm(snap.config), _norm(live_config),
+        _norm(snap_config), _norm(live_config),
         fromfile=f"stored ({snap.fetched_at.strftime('%Y-%m-%d %H:%M')})",
         tofile="live", lineterm="",
     ))

@@ -13,7 +13,7 @@ Network management and automation platform for MSPs and network engineers. Conne
 
 ## Tech Stack
 
-- **Backend**: FastAPI, SQLAlchemy, SQLite
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL
 - **Auth**: JWT (python-jose) + Fernet encryption for device passwords
 - **Network**: Netmiko, NAPALM, Paramiko
 - **AI**: Anthropic Claude API
@@ -23,20 +23,7 @@ Network management and automation platform for MSPs and network engineers. Conne
 
 ### Prerequisites
 
-- Python 3.9+
-- A virtual environment (recommended)
-
-### Installation
-
-```bash
-git clone https://github.com/bashar1aziz/network-orchestrator.git
-cd network-orchestrator
-
-python3.9 -m venv venv
-source venv/bin/activate
-
-pip install -r requirements.txt
-```
+- Docker and Docker Compose
 
 ### Configuration
 
@@ -51,16 +38,16 @@ Edit `.env` and fill in:
 | `ANTHROPIC_API_KEY` | Get from [console.anthropic.com](https://console.anthropic.com) |
 | `SECRET_KEY` | JWT secret — run `openssl rand -hex 32` |
 | `FERNET_KEY` | Device password encryption key — see `.env.example` for generation command |
+| `POSTGRES_PASSWORD` | Strong password for the database |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Session length (default: 480) |
 
 ### Run
 
 ```bash
-source venv/bin/activate
-python -m uvicorn backend.main:app --reload --port 8001
+docker compose up --build
 ```
 
-Open [http://localhost:8001](http://localhost:8001) for the UI, or [http://localhost:8001/docs](http://localhost:8001/docs) for the API explorer.
+Open [http://localhost:8000](http://localhost:8000) for the UI, or [http://localhost:8000/docs](http://localhost:8000/docs) for the API explorer.
 
 ## API Overview
 
@@ -74,12 +61,6 @@ Open [http://localhost:8001](http://localhost:8001) for the UI, or [http://local
 | GET | `/api/devices/{id}/status` | Pull live device status |
 | POST | `/api/analysis` | Run AI analysis |
 | GET | `/api/analysis/history` | Analysis history |
-
-## Docker
-
-```bash
-docker-compose up --build
-```
 
 ## Security Notes
 

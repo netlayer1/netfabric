@@ -203,6 +203,20 @@ if not col_exists("devices", "platform"):
 else:
     print("✓ devices.platform already exists")
 
+# ── 11. ipam_subnets.parent_id column ────────────────────────────────────────
+if not col_exists("ipam_subnets", "parent_id"):
+    execute("ALTER TABLE ipam_subnets ADD COLUMN parent_id INTEGER REFERENCES ipam_subnets(id)",
+            "Added ipam_subnets.parent_id column")
+else:
+    print("✓ ipam_subnets.parent_id already exists")
+
+# ── 12. ipam_vlans.vlan_group_id column ──────────────────────────────────────
+if not col_exists("ipam_vlans", "vlan_group_id"):
+    execute("ALTER TABLE ipam_vlans ADD COLUMN vlan_group_id INTEGER REFERENCES ipam_vlan_groups(id)",
+            "Added ipam_vlans.vlan_group_id column")
+else:
+    print("✓ ipam_vlans.vlan_group_id already exists")
+
 commit()
 close()
 print("\nMigration complete.")

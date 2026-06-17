@@ -1,6 +1,6 @@
 # Web framework
 fastapi==0.111.0
-uvicorn[standard]==0.29.0
+hypercorn==0.17.3
 
 # Auth
 python-jose[cryptography]==3.3.0
