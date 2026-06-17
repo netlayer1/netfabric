@@ -3567,12 +3567,29 @@ async function loadIpamSubnets() {
   const tbody = document.getElementById('ipam-subnet-tbody');
   try {
     ipamSubnets = await api('GET', '/api/ipam/subnets');
-    // Sort: parents before children, then by prefix length
-    ipamSubnets.sort((a, b) => {
-      if (!a.parent_id && b.parent_id) return -1;
-      if (a.parent_id && !b.parent_id) return 1;
-      return a.network.localeCompare(b.network);
-    });
+    // Build tree: children immediately follow their parent
+    (function sortTree() {
+      const byId = {};
+      ipamSubnets.forEach(s => { byId[s.id] = s; s._depth = 0; });
+      const roots = ipamSubnets.filter(s => !s.parent_id).sort((a,b) => a.network.localeCompare(b.network));
+      const children = {};
+      ipamSubnets.filter(s => s.parent_id).forEach(s => {
+        (children[s.parent_id] = children[s.parent_id] || []).push(s);
+      });
+      const result = [];
+      function walk(nodes, depth) {
+        nodes.forEach(n => {
+          n._depth = depth;
+          result.push(n);
+          if (children[n.id]) walk(children[n.id].sort((a,b) => a.network.localeCompare(b.network)), depth + 1);
+        });
+      }
+      walk(roots, 0);
+      // append any orphans (parent_id set but parent missing)
+      const inResult = new Set(result.map(s => s.id));
+      ipamSubnets.filter(s => !inResult.has(s.id)).forEach(s => result.push(s));
+      ipamSubnets = result;
+    })();
     document.getElementById('ipam-subnet-count').textContent = `${ipamSubnets.length} subnet${ipamSubnets.length !== 1 ? 's' : ''}`;
 
     // Refresh subnet filter in addresses pane
@@ -3605,8 +3622,9 @@ async function loadIpamSubnets() {
           <span class="text-sm text-muted">${pct}% (${u.used+u.reserved}/${u.total})</span>
         </div>` : '<span class="text-muted text-sm">—</span>';
       const vlan = s.vlan_id && vlanMap[s.vlan_id] ? `<span class="badge badge-accent">VLAN ${vlanMap[s.vlan_id].vlan_id}</span>` : '<span class="text-muted">—</span>';
-      const indent = s.parent_id ? 'padding-left:28px;' : '';
-      const prefix = s.parent_id ? '<span style="color:var(--muted);margin-right:4px;">└</span>' : '';
+      const depth = s._depth || 0;
+      const indent = depth ? `padding-left:${depth * 28}px;` : '';
+      const prefix = depth ? '<span style="color:var(--muted);margin-right:4px;">└</span>' : '';
       return `<tr class="device-table-row" style="border-bottom:1px solid var(--border);">
         <td style="padding:10px 12px;font-weight:600;font-family:monospace;${indent}">${prefix}${escHtml(s.network)}</td>
         <td style="padding:10px 12px;color:var(--muted);">${escHtml(s.vrf) || '—'}</td>
