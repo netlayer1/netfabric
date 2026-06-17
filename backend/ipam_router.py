@@ -35,10 +35,14 @@ from backend.database import get_db
 from backend.auth import get_current_user
 from backend.models import User
 from backend.ipam_models import (
-    Vlan, Subnet, IPAddress,
+    Vlan, Subnet, IPAddress, Vrf, VlanGroup, Site, Datacenter,
     VlanCreate, VlanUpdate, VlanResponse,
     SubnetCreate, SubnetUpdate, SubnetResponse, SubnetUtilization,
     IPAddressCreate, IPAddressUpdate, IPAddressResponse,
+    VrfCreate, VrfUpdate, VrfResponse,
+    VlanGroupCreate, VlanGroupUpdate, VlanGroupResponse,
+    SiteCreate, SiteUpdate, SiteResponse,
+    DatacenterCreate, DatacenterUpdate, DatacenterResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -354,3 +358,122 @@ def delete_address(
     a = _get_address(addr_id, current_user.id, db)
     db.delete(a)
     db.commit()
+
+
+# ─────────────────────────────────────────────
+# VRF Routes
+# ─────────────────────────────────────────────
+
+@router.get("/vrfs", response_model=List[VrfResponse])
+def list_vrfs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Vrf).filter(Vrf.user_id == current_user.id).order_by(Vrf.name).all()
+
+@router.post("/vrfs", response_model=VrfResponse, status_code=201)
+def create_vrf(payload: VrfCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    existing = db.query(Vrf).filter(Vrf.user_id == current_user.id, Vrf.name == payload.name).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"VRF '{payload.name}' already exists")
+    v = Vrf(user_id=current_user.id, **payload.model_dump())
+    db.add(v); db.commit(); db.refresh(v)
+    return v
+
+@router.put("/vrfs/{vrf_id}", response_model=VrfResponse)
+def update_vrf(vrf_id: int, payload: VrfUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    v = db.query(Vrf).filter(Vrf.id == vrf_id, Vrf.user_id == current_user.id).first()
+    if not v: raise HTTPException(status_code=404, detail="VRF not found")
+    for k, val in payload.model_dump(exclude_none=True).items(): setattr(v, k, val)
+    db.commit(); db.refresh(v)
+    return v
+
+@router.delete("/vrfs/{vrf_id}", status_code=204)
+def delete_vrf(vrf_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    v = db.query(Vrf).filter(Vrf.id == vrf_id, Vrf.user_id == current_user.id).first()
+    if not v: raise HTTPException(status_code=404, detail="VRF not found")
+    db.delete(v); db.commit()
+
+
+# ─────────────────────────────────────────────
+# VLAN Group Routes
+# ─────────────────────────────────────────────
+
+@router.get("/vlan-groups", response_model=List[VlanGroupResponse])
+def list_vlan_groups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(VlanGroup).filter(VlanGroup.user_id == current_user.id).order_by(VlanGroup.name).all()
+
+@router.post("/vlan-groups", response_model=VlanGroupResponse, status_code=201)
+def create_vlan_group(payload: VlanGroupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    g = VlanGroup(user_id=current_user.id, **payload.model_dump())
+    db.add(g); db.commit(); db.refresh(g)
+    return g
+
+@router.put("/vlan-groups/{group_id}", response_model=VlanGroupResponse)
+def update_vlan_group(group_id: int, payload: VlanGroupUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    g = db.query(VlanGroup).filter(VlanGroup.id == group_id, VlanGroup.user_id == current_user.id).first()
+    if not g: raise HTTPException(status_code=404, detail="VLAN Group not found")
+    for k, val in payload.model_dump(exclude_none=True).items(): setattr(g, k, val)
+    db.commit(); db.refresh(g)
+    return g
+
+@router.delete("/vlan-groups/{group_id}", status_code=204)
+def delete_vlan_group(group_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    g = db.query(VlanGroup).filter(VlanGroup.id == group_id, VlanGroup.user_id == current_user.id).first()
+    if not g: raise HTTPException(status_code=404, detail="VLAN Group not found")
+    db.delete(g); db.commit()
+
+
+# ─────────────────────────────────────────────
+# Site Routes
+# ─────────────────────────────────────────────
+
+@router.get("/sites", response_model=List[SiteResponse])
+def list_sites(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Site).filter(Site.user_id == current_user.id).order_by(Site.name).all()
+
+@router.post("/sites", response_model=SiteResponse, status_code=201)
+def create_site(payload: SiteCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    s = Site(user_id=current_user.id, **payload.model_dump())
+    db.add(s); db.commit(); db.refresh(s)
+    return s
+
+@router.put("/sites/{site_id}", response_model=SiteResponse)
+def update_site(site_id: int, payload: SiteUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    s = db.query(Site).filter(Site.id == site_id, Site.user_id == current_user.id).first()
+    if not s: raise HTTPException(status_code=404, detail="Site not found")
+    for k, val in payload.model_dump(exclude_none=True).items(): setattr(s, k, val)
+    db.commit(); db.refresh(s)
+    return s
+
+@router.delete("/sites/{site_id}", status_code=204)
+def delete_site(site_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    s = db.query(Site).filter(Site.id == site_id, Site.user_id == current_user.id).first()
+    if not s: raise HTTPException(status_code=404, detail="Site not found")
+    db.delete(s); db.commit()
+
+
+# ─────────────────────────────────────────────
+# Datacenter Routes
+# ─────────────────────────────────────────────
+
+@router.get("/datacenters", response_model=List[DatacenterResponse])
+def list_datacenters(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Datacenter).filter(Datacenter.user_id == current_user.id).order_by(Datacenter.name).all()
+
+@router.post("/datacenters", response_model=DatacenterResponse, status_code=201)
+def create_datacenter(payload: DatacenterCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = Datacenter(user_id=current_user.id, **payload.model_dump())
+    db.add(d); db.commit(); db.refresh(d)
+    return d
+
+@router.put("/datacenters/{dc_id}", response_model=DatacenterResponse)
+def update_datacenter(dc_id: int, payload: DatacenterUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = db.query(Datacenter).filter(Datacenter.id == dc_id, Datacenter.user_id == current_user.id).first()
+    if not d: raise HTTPException(status_code=404, detail="Datacenter not found")
+    for k, val in payload.model_dump(exclude_none=True).items(): setattr(d, k, val)
+    db.commit(); db.refresh(d)
+    return d
+
+@router.delete("/datacenters/{dc_id}", status_code=204)
+def delete_datacenter(dc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = db.query(Datacenter).filter(Datacenter.id == dc_id, Datacenter.user_id == current_user.id).first()
+    if not d: raise HTTPException(status_code=404, detail="Datacenter not found")
+    db.delete(d); db.commit()

@@ -3,32 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Network AI Orchestrator</title>
+  <title>NetOps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <style>
     /* ── Reset & Base ─────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --muted: #8b949e;
-      --accent: #58a6ff;
-      --accent-dim: #1f3a5f;
-      --success: #3fb950;
-      --warning: #d29922;
-      --danger: #f85149;
-      --purple: #bc8cff;
-      --radius: 8px;
+      --bg:          #0a0c10;
+      --surface:     #111318;
+      --surface-2:   #191c23;
+      --border:      #1e2330;
+      --border-hover:#2a3140;
+      --text:        #e2e8f0;
+      --muted:       #64748b;
+      --muted-2:     #4a5568;
+      --accent:      #3b82f6;
+      --accent-hover:#2563eb;
+      --accent-dim:  #1e3a5f22;
+      --accent-glow: rgba(59,130,246,.15);
+      --success:     #22c55e;
+      --warning:     #f59e0b;
+      --danger:      #ef4444;
+      --purple:      #a78bfa;
+      --radius:      8px;
+      --radius-lg:   12px;
+      --shadow:      0 4px 24px rgba(0,0,0,.4);
+      --shadow-sm:   0 2px 8px rgba(0,0,0,.3);
     }
-    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+    }
     a { color: var(--accent); text-decoration: none; }
-    pre, code { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    pre, code { font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace; }
 
     /* ── Utilities ───────────────────────────── */
     .hidden { display: none !important; }
     .flex { display: flex; }
+    .gap-1 { gap: 4px; }
     .gap-2 { gap: 8px; }
     .gap-4 { gap: 16px; }
     .items-center { align-items: center; }
@@ -41,91 +56,174 @@
     .mt-2 { margin-top: 8px; }
     .mt-4 { margin-top: 16px; }
     .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      display: inline-flex; align-items: center; padding: 2px 8px;
+      border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: .02em;
     }
-    .badge-success { background: rgba(63,185,80,.15); color: var(--success); }
-    .badge-danger  { background: rgba(248,81,73,.15);  color: var(--danger);  }
-    .badge-warning { background: rgba(210,153,34,.15); color: var(--warning); }
-    .badge-accent  { background: var(--accent-dim);    color: var(--accent);  }
+    .badge-success { background: rgba(34,197,94,.12); color: var(--success); border: 1px solid rgba(34,197,94,.2); }
+    .badge-danger  { background: rgba(239,68,68,.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,.2); }
+    .badge-warning { background: rgba(245,158,11,.12); color: var(--warning); border: 1px solid rgba(245,158,11,.2); }
+    .badge-accent  { background: var(--accent-glow);   color: var(--accent);  border: 1px solid rgba(59,130,246,.2); }
 
     /* ── Cards & Forms ───────────────────────── */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block; margin-bottom: 6px; font-size: 11px; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+    }
     input, select, textarea {
       width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text); font-size: 13px; outline: none;
-      transition: border-color .2s;
+      font-family: inherit; transition: border-color .2s, box-shadow .2s;
     }
-    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    input::placeholder { color: var(--muted-2); }
+    textarea { resize: vertical; min-height: 80px; }
+    select { cursor: pointer; }
     .btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 9px 16px; border: none; border-radius: var(--radius);
-      font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 16px; border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: all .15s; white-space: nowrap; letter-spacing: .01em;
     }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-primary  { background: var(--accent); color: #0d1117; }
-    .btn-ghost    { background: transparent; color: var(--text); border: 1px solid var(--border); }
-    .btn-danger   { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-primary  {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.2);
+    }
+    .btn-primary:hover:not(:disabled)  { background: var(--accent-hover); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .btn-ghost    { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled)    { border-color: var(--border-hover); background: #1e2330; }
+    .btn-danger   { background: rgba(239,68,68,.1); color: var(--danger); border: 1px solid rgba(239,68,68,.25); }
+    .btn-danger:hover:not(:disabled)   { background: rgba(239,68,68,.2); }
+    .btn-success  { background: var(--success); color: #0a0c10; }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
 
     /* NSO-style action button */
     .nso-btn {
-      display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px;
-      font-weight: 600; cursor: pointer; border: 1px solid #2ea84366;
-      background: #0f2d1a; color: #3fb950; white-space: nowrap;
-      transition: background .15s, color .15s;
+      display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; font-size: 11px;
+      font-weight: 600; cursor: pointer; border: 1px solid rgba(34,197,94,.2);
+      background: rgba(34,197,94,.08); color: var(--success); white-space: nowrap;
+      transition: all .15s; font-family: inherit;
     }
-    .nso-btn:hover   { background: #3fb950; color: #0d1117; }
-    .nso-btn:disabled { opacity: .45; cursor: wait; }
-    .device-table-row:hover { background: #161b22aa; }
-    .device-table-row:hover td { background: transparent; }
-    .btn-success  { background: var(--success); color: #0d1117; }
-    .btn:hover:not(:disabled) { opacity: .85; }
+    .nso-btn:hover   { background: rgba(34,197,94,.18); border-color: rgba(34,197,94,.4); }
+    .nso-btn:disabled { opacity: .4; cursor: wait; }
+    .device-table-row { transition: background .1s; }
+    .device-table-row:hover td { background: rgba(59,130,246,.04) !important; }
 
     /* ── Spinner ─────────────────────────────── */
     .spinner {
       width: 16px; height: 16px; border: 2px solid var(--border);
-      border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite;
+      border-top-color: var(--accent); border-radius: 50%; animation: spin .65s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Login Page ──────────────────────────── */
     #login-page {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; display: flex; align-items: stretch;
     }
-    .login-box { width: 380px; }
-    .login-box h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
-    .login-box p { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
-    .login-tabs { display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-    .login-tab { flex: 1; padding: 9px; text-align: center; cursor: pointer; font-size: 13px; background: transparent; color: var(--muted); border: none; }
-    .login-tab.active { background: var(--accent); color: #0d1117; font-weight: 600; }
+    .login-left {
+      flex: 1; background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      padding: 48px; position: relative; overflow: hidden;
+    }
+    .login-left::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 30% 50%, rgba(59,130,246,.12) 0%, transparent 65%),
+                  radial-gradient(ellipse at 80% 20%, rgba(99,102,241,.08) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .login-left-content { position: relative; z-index: 1; max-width: 480px; width: 100%; }
+    .login-left h2 { font-size: 26px; font-weight: 700; margin-bottom: 10px; letter-spacing: -.02em; }
+    .login-left p { color: var(--muted); font-size: 14px; line-height: 1.7; max-width: 360px; }
+    .login-dc-svg { margin-bottom: 36px; }
+    .login-features { display: flex; flex-direction: column; gap: 14px; margin-top: 28px; }
+    .login-feature {
+      display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted);
+    }
+    .login-feature-dot {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: var(--accent-glow); border: 1px solid rgba(59,130,246,.2);
+      display: flex; align-items: center; justify-content: center; color: var(--accent);
+    }
+    .login-right {
+      width: 420px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      padding: 48px 40px; background: var(--bg);
+    }
+    .login-box { width: 100%; }
+    .login-logo {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 32px;
+    }
+    .login-logo-mark {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .login-logo-mark svg { color: #fff; }
+    .login-logo-name { font-size: 20px; font-weight: 700; color: var(--text); }
+    .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; letter-spacing: -.01em; }
+    .login-box p { color: var(--muted); margin-bottom: 28px; font-size: 13px; }
+    .login-tabs {
+      display: flex; gap: 0; margin-bottom: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; padding: 3px;
+    }
+    .login-tab {
+      flex: 1; padding: 8px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 500;
+      background: transparent; color: var(--muted); border: none; border-radius: 6px;
+      transition: all .15s; font-family: inherit;
+    }
+    .login-tab.active { background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-sm); }
 
     /* ── App Shell ───────────────────────────── */
     #app { display: flex; flex-direction: column; height: 100vh; }
 
     /* Top bar */
     .topbar {
-      height: 48px; background: #161b22; border-bottom: 1px solid var(--border);
+      height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; padding: 0 16px; gap: 12px;
       flex-shrink: 0; z-index: 20;
     }
-    .topbar-brand {
-      font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap;
-      flex: 1;
+    .topbar-logo-mark {
+      width: 26px; height: 26px; border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; flex-shrink: 0;
+      box-shadow: 0 0 12px rgba(59,130,246,.3);
     }
+    .topbar-brand {
+      font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; flex: 1;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .topbar-brand-mark {
+      width: 26px; height: 26px; border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .topbar-brand-mark svg { color: #fff; }
     .topbar-brand strong { color: var(--accent); }
-    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+    .topbar-actions { display: flex; align-items: center; gap: 6px; }
     .topbar-btn {
       display: flex; align-items: center; gap: 6px; padding: 5px 12px;
       border: 1px solid var(--border); border-radius: var(--radius);
       background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
-      transition: color .15s, border-color .15s;
+      font-family: inherit; font-weight: 500; transition: all .15s;
     }
-    .topbar-btn:hover { color: var(--text); border-color: var(--accent); }
+    .topbar-btn:hover { color: var(--text); border-color: var(--accent); background: var(--accent-glow); }
     .hamburger-btn {
       width: 32px; height: 32px; display: flex; flex-direction: column;
       justify-content: center; gap: 5px; cursor: pointer; padding: 4px; flex-shrink: 0;
+      border-radius: var(--radius);
     }
     .hamburger-btn span {
       display: block; height: 2px; background: var(--muted); border-radius: 2px;
@@ -136,115 +234,168 @@
     /* App body */
     .app-body { display: flex; flex: 1; overflow: hidden; }
 
-    /* Sidebar */
+    /* ── Sidebar ─────────────────────────────── */
     .sidebar {
-      width: 200px; background: var(--surface); border-right: 1px solid var(--border);
+      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; flex-shrink: 0;
       transition: width .2s ease; overflow: hidden;
     }
-    .sidebar.collapsed { width: 48px; }
+    .sidebar.collapsed { width: 52px; }
     .sidebar.collapsed .nav-label { display: none; }
     .sidebar.collapsed .sidebar-section-label { display: none; }
     .nav-section-label {
-      padding: 14px 16px 4px; font-size: 10px; font-weight: 700;
-      color: var(--muted); text-transform: uppercase; letter-spacing: .8px;
+      padding: 20px 16px 6px; font-size: 10px; font-weight: 700;
+      color: var(--muted-2); text-transform: uppercase; letter-spacing: .08em;
       white-space: nowrap; overflow: hidden;
     }
     .nav-item {
-      display: flex; align-items: center; gap: 10px; padding: 9px 14px;
-      cursor: pointer; color: var(--muted); font-size: 13px;
+      display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin: 1px 8px;
+      cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500;
       transition: background .15s, color .15s; white-space: nowrap;
-      border-left: 3px solid transparent;
+      border-radius: var(--radius);
     }
-    .nav-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
-    .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
+    .nav-item:hover { background: var(--surface-2); color: var(--text); }
+    .nav-item.active { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(59,130,246,.15); }
     .nav-item svg { flex-shrink: 0; }
-    /* Devices dropdown */
+
+    /* Nav group (dropdown) */
     .nav-group { position: relative; }
     .nav-group-header {
-      display: flex; align-items: center; gap: 10px; padding: 9px 14px;
-      cursor: pointer; color: var(--muted); font-size: 13px;
+      display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin: 1px 8px;
+      cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500;
       transition: background .15s, color .15s; white-space: nowrap;
-      border-left: 3px solid transparent; justify-content: space-between;
+      border-radius: var(--radius); justify-content: space-between;
     }
-    .nav-group-header:hover { background: rgba(88,166,255,.07); color: var(--text); }
+    .nav-group-header:hover { background: var(--surface-2); color: var(--text); }
     .nav-group-header.open { color: var(--text); }
     .nav-group-header .nav-group-left { display: flex; align-items: center; gap: 10px; }
     .nav-group-header svg { flex-shrink: 0; }
-    .nav-group-chevron { transition: transform .2s; }
+    .nav-group-chevron { transition: transform .2s; color: var(--muted-2); }
     .nav-group-header.open .nav-group-chevron { transform: rotate(90deg); }
-    .nav-sub { overflow: hidden; max-height: 0; transition: max-height .2s ease; }
-    .nav-sub.open { max-height: 200px; }
+    .nav-sub { overflow: hidden; max-height: 0; transition: max-height .25s ease; }
+    .nav-sub.open { max-height: 300px; }
     .nav-sub-item {
-      display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 38px;
-      cursor: pointer; color: var(--muted); font-size: 12px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px 7px 42px; margin: 1px 8px;
+      cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 500;
       transition: background .15s, color .15s; white-space: nowrap;
-      border-left: 3px solid transparent;
+      border-radius: var(--radius); position: relative;
     }
-    .nav-sub-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
-    .nav-sub-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; border-left-color: var(--accent); }
+    .nav-sub-item::before {
+      content: ''; position: absolute; left: 24px; top: 50%; transform: translateY(-50%);
+      width: 4px; height: 4px; border-radius: 50%; background: var(--muted-2);
+      transition: background .15s;
+    }
+    .nav-sub-item:hover { background: var(--surface-2); color: var(--text); }
+    .nav-sub-item:hover::before { background: var(--text); }
+    .nav-sub-item.active { background: var(--accent-glow); color: var(--accent); }
+    .nav-sub-item.active::before { background: var(--accent); }
     .sidebar.collapsed .nav-group-chevron { display: none; }
     .sidebar.collapsed .nav-sub { display: none; }
-    .sidebar-footer { margin-top: auto; padding: 10px 8px; border-top: 1px solid var(--border); }
-    .user-info { font-size: 11px; color: var(--muted); margin-bottom: 6px; word-break: break-all; padding: 0 6px; }
+    .sidebar-footer { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--border); }
+    .user-info {
+      font-size: 11px; color: var(--muted); margin-bottom: 8px;
+      word-break: break-all; padding: 0 8px;
+    }
 
-    /* Main content */
+    /* ── Main content ────────────────────────── */
     .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
     .page-header {
-      padding: 18px 28px 14px; border-bottom: 1px solid var(--border);
+      padding: 20px 28px 16px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; background: var(--bg); z-index: 10;
+      backdrop-filter: blur(8px);
     }
-    .page-header h2 { font-size: 20px; font-weight: 600; }
+    .page-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
     .page-content { padding: 24px 28px; }
 
-    /* NSO Home cards */
-    .home-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 860px; }
+    /* ── Home cards ──────────────────────────── */
+    /* ── Dashboard stat bar ── */
+    .dash-stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px;
+    }
+    .dash-stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 18px 20px; cursor: default; position: relative; overflow: hidden;
+    }
+    .dash-stat::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--stat-color, var(--accent)), transparent);
+    }
+    .dash-stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+    .dash-stat-label { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .05em; }
+    .dash-stat-icon {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      color: var(--stat-color, var(--accent)); opacity: .15;
+    }
+    /* ── Quick actions ── */
+    .home-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
     .home-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 22px 24px; cursor: pointer; display: flex; align-items: center;
-      justify-content: space-between; transition: border-color .2s, background .2s;
-      min-height: 80px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 20px 18px; cursor: pointer; display: flex; flex-direction: column;
+      gap: 12px; transition: all .2s; position: relative; overflow: hidden;
     }
-    .home-card:hover { border-color: var(--accent); background: #1a2030; }
-    .home-card-title { font-size: 16px; font-weight: 600; color: var(--text); }
-    .home-card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .home-card-icon { color: var(--muted); flex-shrink: 0; opacity: .6; }
-    .home-section-title { font-size: 15px; font-weight: 600; margin: 28px 0 14px; color: var(--text); }
+    .home-card:hover {
+      border-color: rgba(59,130,246,.4);
+      background: var(--surface-2);
+      box-shadow: 0 0 0 1px rgba(59,130,246,.1), var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+    .home-card-icon-wrap {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--accent-glow); border: 1px solid rgba(59,130,246,.2);
+      display: flex; align-items: center; justify-content: center; color: var(--accent);
+    }
+    .home-card-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .home-card-sub { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+    .home-card-icon { color: var(--accent); flex-shrink: 0; opacity: .7; }
+    .home-card-arrow { font-size: 16px; color: var(--muted); align-self: flex-end; }
+    .home-section-title { font-size: 13px; font-weight: 700; margin: 28px 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
-    /* ── Devices ─────────────────────────────── */
-    .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    /* ── Device cards ────────────────────────── */
+    .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
     .device-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 16px; cursor: pointer; transition: border-color .2s;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 16px; cursor: pointer; transition: all .2s;
     }
-    .device-card:hover { border-color: var(--accent); }
+    .device-card:hover { border-color: rgba(59,130,246,.35); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
     .device-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .device-name { font-size: 15px; font-weight: 600; }
-    .device-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .device-name { font-size: 14px; font-weight: 600; }
+    .device-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
     /* ── Modal ───────────────────────────────── */
     .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      position: fixed; inset: 0; background: rgba(0,0,0,.7);
       display: flex; align-items: center; justify-content: center; z-index: 100;
+      backdrop-filter: blur(4px);
     }
     .modal {
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 24px; width: 460px; max-height: 90vh; overflow-y: auto;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 28px; width: 480px; max-height: 90vh; overflow-y: auto;
+      box-shadow: var(--shadow);
     }
-    .modal h3 { margin-bottom: 20px; font-size: 16px; }
-    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .modal h3 { margin-bottom: 22px; font-size: 16px; font-weight: 700; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+    /* ── Network Fabric tabs ─────────────────── */
+    .fabric-tab {
+      padding: 10px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+      border: none; background: transparent; color: var(--muted); font-family: inherit;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s; white-space: nowrap;
+    }
+    .fabric-tab:hover:not(.active) { color: var(--text); }
+    .fabric-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
     /* ── Analysis ────────────────────────────── */
-    .analysis-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .analysis-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
     .analysis-tab {
-      padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
-      cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted);
-      transition: all .15s;
+      padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border); background: transparent;
+      color: var(--muted); transition: all .15s; font-family: inherit;
     }
-    .analysis-tab.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
-    .analysis-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
-
+    .analysis-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .analysis-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
     .analysis-output {
       background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
       padding: 16px; min-height: 200px; max-height: 600px; overflow-y: auto;
@@ -253,59 +404,242 @@
 
     /* ── History ─────────────────────────────── */
     .history-item {
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color .2s;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 14px 16px; margin-bottom: 8px; cursor: pointer; transition: all .2s;
     }
-    .history-item:hover { border-color: var(--accent); }
+    .history-item:hover { border-color: rgba(59,130,246,.35); background: var(--surface-2); }
     .history-item-header { display: flex; justify-content: space-between; align-items: center; }
 
     /* ── Toast ───────────────────────────────── */
-    #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
     .toast {
-      padding: 12px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
-      min-width: 250px; animation: slideIn .2s ease;
+      padding: 12px 16px; border-radius: var(--radius-lg); font-size: 13px; font-weight: 500;
+      min-width: 260px; animation: slideIn .2s ease; box-shadow: var(--shadow); backdrop-filter: blur(8px);
     }
-    .toast-success { background: #1a3a1a; border: 1px solid var(--success); color: var(--success); }
-    .toast-error   { background: #3a1a1a; border: 1px solid var(--danger);  color: var(--danger);  }
-    .toast-info    { background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); }
-    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .toast-success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: var(--success); }
+    .toast-error   { background: rgba(239,68,68,.12);  border: 1px solid rgba(239,68,68,.3);  color: var(--danger); }
+    .toast-info    { background: var(--accent-glow);   border: 1px solid rgba(59,130,246,.3); color: var(--accent); }
+    @keyframes slideIn { from { transform: translateX(16px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
     /* ── Dashboard Stats ─────────────────────── */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
-    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px;
+      transition: border-color .2s;
+    }
+    .stat-card:hover { border-color: var(--border-hover); }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: -.02em; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
   </style>
 </head>
 <body>
 
 <!-- ── Login Page ──────────────────────────────────── -->
 <div id="login-page">
-  <div class="login-box card">
-    <h1>Network AI Orchestrator</h1>
-    <p>AI-powered network management</p>
 
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="setAuthTab('login')">Sign In</button>
-      <button class="login-tab" onclick="setAuthTab('register')">Register</button>
+  <!-- Left: datacenter illustration -->
+  <div class="login-left">
+    <div class="login-left-content">
+      <!-- Datacenter SVG illustration -->
+      <div class="login-dc-svg">
+        <svg width="420" height="280" viewBox="0 0 420 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Floor grid -->
+          <defs>
+            <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+              <path d="M 28 0 L 0 0 0 28" fill="none" stroke="rgba(59,130,246,0.06)" stroke-width="1"/>
+            </pattern>
+            <linearGradient id="rackGrad1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1e2d4a"/>
+              <stop offset="100%" stop-color="#0f1824"/>
+            </linearGradient>
+            <linearGradient id="rackGrad2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1a2a40"/>
+              <stop offset="100%" stop-color="#0d1620"/>
+            </linearGradient>
+            <linearGradient id="glowBlue" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="rgba(59,130,246,0)"/>
+              <stop offset="50%" stop-color="rgba(59,130,246,0.6)"/>
+              <stop offset="100%" stop-color="rgba(59,130,246,0)"/>
+            </linearGradient>
+            <filter id="blur4">
+              <feGaussianBlur stdDeviation="4"/>
+            </filter>
+          </defs>
+          <rect width="420" height="280" fill="url(#grid)"/>
+
+          <!-- Glow orbs -->
+          <ellipse cx="210" cy="240" rx="180" ry="30" fill="rgba(59,130,246,0.05)" filter="url(#blur4)"/>
+          <ellipse cx="210" cy="140" rx="100" ry="80" fill="rgba(99,102,241,0.04)" filter="url(#blur4)"/>
+
+          <!-- Server rack 1 -->
+          <g transform="translate(30, 40)">
+            <rect width="72" height="200" rx="4" fill="url(#rackGrad1)" stroke="rgba(59,130,246,0.3)" stroke-width="1"/>
+            <!-- rack units -->
+            <rect x="6" y="10" width="60" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="58" cy="16" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="26" width="60" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="58" cy="32" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="42" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="48" r="3" fill="#3b82f6" opacity=".9"/>
+            <rect x="6" y="58" width="60" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="58" cy="64" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="74" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="80" r="3" fill="#f59e0b" opacity=".9"/>
+            <rect x="6" y="90" width="60" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="58" cy="96" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="106" width="60" height="36" rx="2" fill="rgba(30,58,138,0.4)" stroke="rgba(99,102,241,0.4)" stroke-width=".5"/>
+            <text x="36" y="129" text-anchor="middle" font-size="7" fill="rgba(163,163,163,0.7)" font-family="monospace">SWITCH</text>
+            <rect x="6" y="150" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="156" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="166" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="172" r="3" fill="#22c55e" opacity=".9"/>
+            <!-- LED strip -->
+            <rect x="2" y="0" width="2" height="200" rx="1" fill="url(#glowBlue)" opacity=".5"/>
+          </g>
+
+          <!-- Server rack 2 -->
+          <g transform="translate(120, 55)">
+            <rect width="72" height="185" rx="4" fill="url(#rackGrad2)" stroke="rgba(59,130,246,0.25)" stroke-width="1"/>
+            <rect x="6" y="10" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="16" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="26" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="32" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="42" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="48" r="3" fill="#3b82f6" opacity=".9"/>
+            <rect x="6" y="58" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="64" r="3" fill="#ef4444" opacity=".9"/>
+            <rect x="6" y="74" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="80" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="90" width="60" height="36" rx="2" fill="rgba(30,58,138,0.4)" stroke="rgba(99,102,241,0.4)" stroke-width=".5"/>
+            <text x="36" y="113" text-anchor="middle" font-size="7" fill="rgba(163,163,163,0.7)" font-family="monospace">SWITCH</text>
+            <rect x="6" y="134" width="60" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="58" cy="140" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="2" y="0" width="2" height="185" rx="1" fill="url(#glowBlue)" opacity=".4"/>
+          </g>
+
+          <!-- Server rack 3 (center, taller) -->
+          <g transform="translate(220, 30)">
+            <rect width="80" height="220" rx="4" fill="url(#rackGrad1)" stroke="rgba(99,102,241,0.35)" stroke-width="1"/>
+            <rect x="6" y="10" width="68" height="14" rx="2" fill="rgba(99,102,241,0.2)" stroke="rgba(99,102,241,0.4)" stroke-width=".5"/>
+            <text x="38" y="21" text-anchor="middle" font-size="7" fill="rgba(163,163,163,0.8)" font-family="monospace">CORE-RTR</text>
+            <rect x="6" y="30" width="68" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="66" cy="36" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="46" width="68" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="66" cy="52" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="62" width="68" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="66" cy="68" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="78" width="68" height="12" rx="2" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.3)" stroke-width=".5"/>
+            <circle cx="66" cy="84" r="3" fill="#3b82f6" opacity=".9"/>
+            <rect x="6" y="94" width="68" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="66" cy="100" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="110" width="68" height="40" rx="2" fill="rgba(30,58,138,0.5)" stroke="rgba(99,102,241,0.5)" stroke-width=".5"/>
+            <text x="40" y="134" text-anchor="middle" font-size="7" fill="rgba(163,163,163,0.8)" font-family="monospace">FIREWALL</text>
+            <rect x="6" y="158" width="68" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="66" cy="164" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="174" width="68" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="66" cy="180" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="190" width="68" height="12" rx="2" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.25)" stroke-width=".5"/>
+            <circle cx="66" cy="196" r="3" fill="#f59e0b" opacity=".9"/>
+            <rect x="2" y="0" width="2" height="220" rx="1" fill="url(#glowBlue)" opacity=".6"/>
+          </g>
+
+          <!-- Server rack 4 -->
+          <g transform="translate(318, 50)">
+            <rect width="72" height="190" rx="4" fill="url(#rackGrad2)" stroke="rgba(59,130,246,0.2)" stroke-width="1"/>
+            <rect x="6" y="10" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="16" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="26" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="32" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="42" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="48" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="58" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="64" r="3" fill="#3b82f6" opacity=".9"/>
+            <rect x="6" y="74" width="60" height="36" rx="2" fill="rgba(30,58,138,0.4)" stroke="rgba(99,102,241,0.4)" stroke-width=".5"/>
+            <text x="36" y="97" text-anchor="middle" font-size="7" fill="rgba(163,163,163,0.7)" font-family="monospace">SWITCH</text>
+            <rect x="6" y="118" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="124" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="6" y="134" width="60" height="12" rx="2" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.2)" stroke-width=".5"/>
+            <circle cx="58" cy="140" r="3" fill="#22c55e" opacity=".9"/>
+            <rect x="2" y="0" width="2" height="190" rx="1" fill="url(#glowBlue)" opacity=".3"/>
+          </g>
+
+          <!-- Cable connections -->
+          <path d="M 102 130 C 130 130 110 100 120 100" stroke="rgba(59,130,246,0.3)" stroke-width="1.5" fill="none"/>
+          <path d="M 192 130 C 210 130 215 130 220 130" stroke="rgba(59,130,246,0.4)" stroke-width="1.5" fill="none"/>
+          <path d="M 300 130 C 308 130 310 130 318 130" stroke="rgba(59,130,246,0.3)" stroke-width="1.5" fill="none"/>
+
+          <!-- Floor line -->
+          <line x1="20" y1="248" x2="400" y2="248" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+          <!-- Shadows under racks -->
+          <ellipse cx="66" cy="248" rx="38" ry="5" fill="rgba(0,0,0,0.4)"/>
+          <ellipse cx="156" cy="248" rx="38" ry="4" fill="rgba(0,0,0,0.35)"/>
+          <ellipse cx="260" cy="248" rx="42" ry="5" fill="rgba(0,0,0,0.4)"/>
+          <ellipse cx="354" cy="248" rx="38" ry="4" fill="rgba(0,0,0,0.35)"/>
+        </svg>
+      </div>
+
+      <h2>Manage your network,<br/>from one place.</h2>
+      <p>Device automation, config management, IPAM, compliance and service templates — all in a single platform built for network engineers.</p>
+
+      <div class="login-features">
+        <div class="login-feature">
+          <div class="login-feature-dot">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+          </div>
+          Multi-vendor device management via SSH
+        </div>
+        <div class="login-feature">
+          <div class="login-feature-dot">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          Config sync, snapshots &amp; diff tracking
+        </div>
+        <div class="login-feature">
+          <div class="login-feature-dot">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/></svg>
+          </div>
+          IP Fabric — subnets, VLANs, VRFs, sites
+        </div>
+      </div>
     </div>
-
-    <div id="auth-error" class="hidden" style="color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
-
-    <div class="form-group">
-      <label>Email</label>
-      <input type="email" id="auth-email" placeholder="you@company.com" />
-    </div>
-    <div class="form-group">
-      <label>Password</label>
-      <input type="password" id="auth-password" placeholder="••••••••"
-             onkeydown="if(event.key==='Enter') authSubmit()" />
-    </div>
-
-    <button class="btn btn-primary" style="width:100%" onclick="authSubmit()" id="auth-btn">
-      Sign In
-    </button>
   </div>
+
+  <!-- Right: sign-in form -->
+  <div class="login-right">
+    <div class="login-box">
+      <div class="login-logo">
+        <div class="login-logo-mark">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <span class="login-logo-name">NetOps</span>
+      </div>
+
+      <h1>Welcome back</h1>
+      <p>Sign in to your NetOps account</p>
+
+      <div class="login-tabs">
+        <button class="login-tab active" onclick="setAuthTab('login')">Sign In</button>
+        <button class="login-tab" onclick="setAuthTab('register')">Register</button>
+      </div>
+
+      <div id="auth-error" class="hidden" style="color:var(--danger);font-size:13px;margin-bottom:12px;padding:10px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);"></div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="auth-email" placeholder="you@company.com" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="auth-password" placeholder="••••••••"
+               onkeydown="if(event.key==='Enter') authSubmit()" />
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;padding:11px;font-size:14px;" onclick="authSubmit()" id="auth-btn">
+        Sign In
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── App Shell ───────────────────────────────────── -->
@@ -317,7 +651,10 @@
       <span></span><span></span><span></span>
     </div>
     <div class="topbar-brand">
-      <strong>Network</strong> Orchestrator
+      <div class="topbar-logo-mark">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <strong>Net</strong>Ops
     </div>
     <div class="topbar-actions">
       <button class="topbar-btn" onclick="showPage('sync')">
@@ -363,9 +700,9 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span class="nav-label">Config Editor</span>
         </div>
-        <div class="nav-item" data-page="ipam" onclick="showPage('ipam')">
+        <div class="nav-item" data-page="fabric" onclick="showPage('fabric')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/><line x1="2" y1="15" x2="20" y2="15"/></svg>
-          <span class="nav-label">IPAM</span>
+          <span class="nav-label">Network Fabric</span>
         </div>
         <div class="nav-item" data-page="lld" onclick="showPage('lld')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -384,38 +721,80 @@
       <!-- HOME -->
       <div id="page-dashboard" class="hidden">
         <div class="page-header">
-          <h2>Home</h2>
+          <div>
+            <h2 style="margin-bottom:2px;">Welcome back, <span id="dash-user-name" style="color:var(--accent);">—</span></h2>
+            <div style="font-size:12px;color:var(--muted);">Here's your network at a glance</div>
+          </div>
           <button class="btn btn-ghost" style="font-size:12px;" onclick="loadDashboard()">↻ Refresh</button>
         </div>
         <div class="page-content">
+
+          <!-- Stat bar -->
+          <div class="dash-stats">
+            <div class="dash-stat" style="--stat-color:#3b82f6;" onclick="showPage('devices')" style="cursor:pointer;">
+              <div class="dash-stat-value" id="stat-device-count">—</div>
+              <div class="dash-stat-label">Devices</div>
+              <svg class="dash-stat-icon" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+            </div>
+            <div class="dash-stat" style="--stat-color:#22c55e;">
+              <div class="dash-stat-value" id="stat-insync-count">—</div>
+              <div class="dash-stat-label">In Sync</div>
+              <svg class="dash-stat-icon" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="dash-stat" style="--stat-color:#f59e0b;">
+              <div class="dash-stat-value" id="stat-groups-count">—</div>
+              <div class="dash-stat-label">Device Groups</div>
+              <svg class="dash-stat-icon" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+            </div>
+            <div class="dash-stat" style="--stat-color:#6366f1;" onclick="showPage('services')" style="cursor:pointer;">
+              <div class="dash-stat-value" id="stat-services-count">—</div>
+              <div class="dash-stat-label">Services</div>
+              <svg class="dash-stat-icon" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </div>
+          </div>
+
+          <!-- Quick actions -->
+          <div class="home-section-title">Quick Access</div>
           <div class="home-grid">
             <div class="home-card" onclick="showPage('devices')">
-              <div>
-                <div class="home-card-title">Devices</div>
-                <div class="home-card-sub" id="stat-devices-sub">Loading…</div>
+              <div class="home-card-icon-wrap">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
               </div>
-              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <div>
+                <div class="home-card-title">Device Management</div>
+                <div class="home-card-sub">Add, edit &amp; connect to devices</div>
+              </div>
+              <div class="home-card-arrow">→</div>
             </div>
-            <div class="home-card" onclick="showPage('services')">
-              <div>
-                <div class="home-card-title">Services</div>
-                <div class="home-card-sub">Manage network services</div>
+            <div class="home-card" onclick="showPage('fabric')">
+              <div class="home-card-icon-wrap" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#6366f1;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/></svg>
               </div>
-              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              <div>
+                <div class="home-card-title">Network Fabric</div>
+                <div class="home-card-sub">IPs, subnets, VLANs, VRFs &amp; sites</div>
+              </div>
+              <div class="home-card-arrow">→</div>
             </div>
             <div class="home-card" onclick="showPage('sync')">
+              <div class="home-card-icon-wrap" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.2);color:#22c55e;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              </div>
               <div>
                 <div class="home-card-title">Config Editor</div>
-                <div class="home-card-sub">Fetch, compare &amp; push device configs</div>
+                <div class="home-card-sub">Fetch, diff &amp; push configs</div>
               </div>
-              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <div class="home-card-arrow">→</div>
             </div>
-            <div class="home-card" onclick="showPage('sync')">
-              <div>
-                <div class="home-card-title">Commit Manager</div>
-                <div class="home-card-sub">Review &amp; apply pending changes</div>
+            <div class="home-card" onclick="showPage('services')">
+              <div class="home-card-icon-wrap" style="background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2);color:#f59e0b;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
               </div>
-              <svg class="home-card-icon" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+              <div>
+                <div class="home-card-title">Services</div>
+                <div class="home-card-sub">Deploy &amp; manage service templates</div>
+              </div>
+              <div class="home-card-arrow">→</div>
             </div>
           </div>
 
@@ -515,51 +894,31 @@
         </div>
       </div>
 
-      <!-- IPAM -->
-      <div id="page-ipam" class="hidden">
-        <div class="page-header">
-          <h2>IPAM</h2>
-          <div class="flex gap-2">
-            <button class="btn btn-ghost" style="font-size:12px;" onclick="loadIpam()">↻ Refresh</button>
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- Network Fabric Page (tabbed)                  -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="page-fabric" class="hidden">
+        <div class="page-header" style="flex-direction:column;align-items:flex-start;gap:0;padding-bottom:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;padding-bottom:12px;">
+            <h2>Network Fabric</h2>
+            <button class="btn btn-ghost" style="font-size:12px;" onclick="fabricTabRefresh()">↻ Refresh</button>
+          </div>
+          <!-- Tabs bar -->
+          <div style="display:flex;gap:0;border-bottom:2px solid var(--border);width:100%;overflow-x:auto;">
+            <button class="fabric-tab active" id="fabric-tab-ip-addresses"  onclick="showFabricTab('ip-addresses')">IP Addresses</button>
+            <button class="fabric-tab"        id="fabric-tab-subnets"       onclick="showFabricTab('subnets')">Subnets</button>
+            <button class="fabric-tab"        id="fabric-tab-vrfs"          onclick="showFabricTab('vrfs')">VRFs</button>
+            <button class="fabric-tab"        id="fabric-tab-vlans"         onclick="showFabricTab('vlans')">VLANs</button>
+            <button class="fabric-tab"        id="fabric-tab-vlan-groups"   onclick="showFabricTab('vlan-groups')">VLAN Groups</button>
+            <button class="fabric-tab"        id="fabric-tab-sites"         onclick="showFabricTab('sites')">Sites</button>
+            <button class="fabric-tab"        id="fabric-tab-datacenters"   onclick="showFabricTab('datacenters')">Datacenters</button>
           </div>
         </div>
+
         <div class="page-content">
 
-          <!-- Sub-tabs -->
-          <div class="analysis-tabs" style="margin-bottom:20px;">
-            <button class="analysis-tab active" id="ipam-tab-subnets"  onclick="ipamTab('subnets')">Subnets</button>
-            <button class="analysis-tab"         id="ipam-tab-addresses" onclick="ipamTab('addresses')">IP Addresses</button>
-            <button class="analysis-tab"         id="ipam-tab-vlans"   onclick="ipamTab('vlans')">VLANs</button>
-          </div>
-
-          <!-- ── Subnets pane ── -->
-          <div id="ipam-pane-subnets">
-            <div class="flex justify-between items-center" style="margin-bottom:14px;">
-              <span class="text-muted text-sm" id="ipam-subnet-count"></span>
-              <button class="btn btn-primary" onclick="openIpamModal('subnet')">+ Add Subnet</button>
-            </div>
-            <div style="overflow-x:auto;">
-              <table style="width:100%;border-collapse:collapse;">
-                <thead>
-                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
-                    <th style="text-align:left;padding:8px 12px;">Network</th>
-                    <th style="text-align:left;padding:8px 12px;">VRF</th>
-                    <th style="text-align:left;padding:8px 12px;">Site</th>
-                    <th style="text-align:left;padding:8px 12px;">VLAN</th>
-                    <th style="text-align:left;padding:8px 12px;">Utilization</th>
-                    <th style="text-align:left;padding:8px 12px;">Description</th>
-                    <th style="padding:8px 12px;"></th>
-                  </tr>
-                </thead>
-                <tbody id="ipam-subnet-tbody">
-                  <tr><td colspan="7" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- ── Addresses pane ── -->
-          <div id="ipam-pane-addresses" class="hidden">
+          <!-- IP Addresses pane -->
+          <div id="fabric-pane-ip-addresses">
             <div class="flex justify-between items-center" style="margin-bottom:14px;">
               <div class="flex gap-2 items-center">
                 <select id="ipam-addr-subnet-filter" style="width:220px;font-size:12px;" onchange="loadIpamAddresses()">
@@ -588,32 +947,130 @@
                   </tr>
                 </thead>
                 <tbody id="ipam-addr-tbody">
-                  <tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Select a subnet or load all.</td></tr>
+                  <tr><td colspan="6" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <!-- ── VLANs pane ── -->
-          <div id="ipam-pane-vlans" class="hidden">
+          <!-- Subnets pane -->
+          <div id="fabric-pane-subnets" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-subnet-count"></span>
+              <button class="btn btn-primary" onclick="openIpamModal('subnet')">+ Add Subnet</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                    <th style="text-align:left;padding:8px 12px;">Network</th>
+                    <th style="text-align:left;padding:8px 12px;">VRF</th>
+                    <th style="text-align:left;padding:8px 12px;">Site</th>
+                    <th style="text-align:left;padding:8px 12px;">VLAN</th>
+                    <th style="text-align:left;padding:8px 12px;">Utilization</th>
+                    <th style="text-align:left;padding:8px 12px;">Description</th>
+                    <th style="padding:8px 12px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ipam-subnet-tbody">
+                  <tr><td colspan="7" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- VRFs pane -->
+          <!-- VRFs pane -->
+          <div id="fabric-pane-vrfs" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-vrf-count"></span>
+              <button class="btn btn-primary" onclick="openFabricModal('vrf')">+ Add VRF</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                  <th style="text-align:left;padding:8px 12px;">Name</th>
+                  <th style="text-align:left;padding:8px 12px;">Route Distinguisher</th>
+                  <th style="text-align:left;padding:8px 12px;">Description</th>
+                  <th style="padding:8px 12px;"></th>
+                </tr></thead>
+                <tbody id="ipam-vrf-tbody"><tr><td colspan="4" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- VLANs pane -->
+          <div id="fabric-pane-vlans" class="hidden">
             <div class="flex justify-between items-center" style="margin-bottom:14px;">
               <span class="text-muted text-sm" id="ipam-vlan-count"></span>
               <button class="btn btn-primary" onclick="openIpamModal('vlan')">+ Add VLAN</button>
             </div>
             <div style="overflow-x:auto;">
               <table style="width:100%;border-collapse:collapse;">
-                <thead>
-                  <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
-                    <th style="text-align:left;padding:8px 12px;">VLAN ID</th>
-                    <th style="text-align:left;padding:8px 12px;">Name</th>
-                    <th style="text-align:left;padding:8px 12px;">Site</th>
-                    <th style="text-align:left;padding:8px 12px;">Description</th>
-                    <th style="padding:8px 12px;"></th>
-                  </tr>
-                </thead>
-                <tbody id="ipam-vlan-tbody">
-                  <tr><td colspan="5" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr>
-                </tbody>
+                <thead><tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                  <th style="text-align:left;padding:8px 12px;">VLAN ID</th>
+                  <th style="text-align:left;padding:8px 12px;">Name</th>
+                  <th style="text-align:left;padding:8px 12px;">Site</th>
+                  <th style="text-align:left;padding:8px 12px;">Description</th>
+                  <th style="padding:8px 12px;"></th>
+                </tr></thead>
+                <tbody id="ipam-vlan-tbody"><tr><td colspan="5" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- VLAN Groups pane -->
+          <div id="fabric-pane-vlan-groups" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-vlan-group-count"></span>
+              <button class="btn btn-primary" onclick="openFabricModal('vlan-group')">+ Add VLAN Group</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                  <th style="text-align:left;padding:8px 12px;">Name</th>
+                  <th style="text-align:left;padding:8px 12px;">Site</th>
+                  <th style="text-align:left;padding:8px 12px;">Description</th>
+                  <th style="padding:8px 12px;"></th>
+                </tr></thead>
+                <tbody id="ipam-vlan-group-tbody"><tr><td colspan="4" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sites pane -->
+          <div id="fabric-pane-sites" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-site-count"></span>
+              <button class="btn btn-primary" onclick="openFabricModal('site')">+ Add Site</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                  <th style="text-align:left;padding:8px 12px;">Name</th>
+                  <th style="text-align:left;padding:8px 12px;">Description</th>
+                  <th style="padding:8px 12px;"></th>
+                </tr></thead>
+                <tbody id="ipam-site-tbody"><tr><td colspan="3" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Datacenters pane -->
+          <div id="fabric-pane-datacenters" class="hidden">
+            <div class="flex justify-between items-center" style="margin-bottom:14px;">
+              <span class="text-muted text-sm" id="ipam-dc-count"></span>
+              <button class="btn btn-primary" onclick="openFabricModal('datacenter')">+ Add Datacenter</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;">
+                  <th style="text-align:left;padding:8px 12px;">Name</th>
+                  <th style="text-align:left;padding:8px 12px;">Location</th>
+                  <th style="text-align:left;padding:8px 12px;">Description</th>
+                  <th style="padding:8px 12px;"></th>
+                </tr></thead>
+                <tbody id="ipam-dc-tbody"><tr><td colspan="4" class="text-muted text-sm" style="padding:16px;">Loading…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -686,6 +1143,7 @@
           </div>
         </div>
       </div>
+
 
       <!-- ══════════════════════════════════════════════ -->
       <!-- LLD Compliance Page                           -->
@@ -1304,7 +1762,7 @@ function showToast(message, type = 'info') {
 // State
 // ════════════════════════════════════════════════
 const API = '';   // Same origin — FastAPI serves the frontend
-let token = localStorage.getItem('nai_token') || '';
+let token = localStorage.getItem('netops_token') || '';
 let currentPage = 'dashboard';
 let devices = [];
 
@@ -1356,7 +1814,7 @@ async function authSubmit() {
     }
     const data = await res.json();
     token = data.access_token;
-    localStorage.setItem('nai_token', token);
+    localStorage.setItem('netops_token', token);
     initApp();
   } catch(e) {
     errEl.textContent = e.message;
@@ -1368,7 +1826,7 @@ async function authSubmit() {
 
 function logout() {
   token = '';
-  localStorage.removeItem('nai_token');
+  localStorage.removeItem('netops_token');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-page').classList.remove('hidden');
 }
@@ -1386,7 +1844,7 @@ async function initApp() {
     api('GET', '/api/authgroups').then(gs => { window._authgroupsCache = gs; }).catch(() => {});
     showPage('dashboard');
   } catch(e) {
-    token = ''; localStorage.removeItem('nai_token');
+    token = ''; localStorage.removeItem('netops_token');
   }
 }
 
@@ -1419,7 +1877,7 @@ function showPage(page) {
   if (page === 'device-groups') loadDeviceGroups();
   if (page === 'services')     loadServices();
   if (page === 'sync')         loadSync();
-  if (page === 'ipam')         loadIpam();
+  if (page === 'fabric')       showFabricTab('ip-addresses');
   if (page === 'lld')          loadLldTemplates();
   if (page === 'neds')         loadNeds();
 }
@@ -1440,15 +1898,33 @@ function toggleSidebar() {
 // Dashboard
 // ════════════════════════════════════════════════
 async function loadDashboard() {
-  try {
-    const devs = await api('GET', '/api/devices');
-    devices = devs;
-    const sub = document.getElementById('stat-devices-sub');
-    if (sub) sub.textContent = `${devs.length} device${devs.length !== 1 ? 's' : ''} managed`;
+  // Populate welcome name from email
+  const nameEl = document.getElementById('dash-user-name');
+  if (nameEl) {
+    const email = document.getElementById('topbar-user-email')?.textContent || '';
+    nameEl.textContent = email.split('@')[0] || 'there';
+  }
 
+  try {
+    const [devs, groups, services] = await Promise.all([
+      api('GET', '/api/devices'),
+      api('GET', '/api/device-groups').catch(() => []),
+      api('GET', '/api/services').catch(() => []),
+    ]);
+    devices = devs;
+
+    // Stat bar
+    const inSync = devs.filter(d => d.sync_state === 'in-sync').length;
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setEl('stat-device-count', devs.length);
+    setEl('stat-insync-count', inSync);
+    setEl('stat-groups-count', groups.length);
+    setEl('stat-services-count', services.length);
+
+    // Recent devices grid
     const grid = document.getElementById('dashboard-devices');
     if (devs.length === 0) {
-      grid.innerHTML = '<div class="text-muted text-sm">No devices yet — add one in Devices.</div>';
+      grid.innerHTML = '<div class="text-muted text-sm">No devices yet — add one in Device Management.</div>';
     } else {
       grid.innerHTML = devs.slice(0, 6).map(d => renderDeviceCard(d)).join('');
     }
@@ -2194,7 +2670,13 @@ async function api(method, path, body) {
   if (res.status === 204) return null;
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = data.detail;
+    const msg = Array.isArray(detail)
+      ? detail.map(e => e.msg || JSON.stringify(e)).join('; ')
+      : (typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -2891,7 +3373,7 @@ async function acceptSyncChanges() {
       renderBackupsList(snaps, _diffDeviceId);
     }
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = '✔ Accept & Update Snapshot';
@@ -2914,6 +3396,28 @@ function ipamTab(tab) {
   if (tab === 'subnets')   loadIpamSubnets();
   if (tab === 'addresses') loadIpamAddresses();
   if (tab === 'vlans')     loadIpamVlans();
+}
+
+// ════════════════════════════════════════════════
+// Network Fabric tabs
+// ════════════════════════════════════════════════
+const FABRIC_TABS = ['ip-addresses','subnets','vrfs','vlans','vlan-groups','sites','datacenters'];
+let currentFabricTab = 'ip-addresses';
+
+function showFabricTab(tab) {
+  currentFabricTab = tab;
+  FABRIC_TABS.forEach(t => {
+    document.getElementById(`fabric-tab-${t}`)?.classList.toggle('active', t === tab);
+    const pane = document.getElementById(`fabric-pane-${t}`);
+    if (pane) pane.classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'ip-addresses') loadIpamAddresses();
+  if (tab === 'subnets')     loadIpamSubnets();
+  if (tab === 'vlans')       loadIpamVlans();
+}
+
+function fabricTabRefresh() {
+  showFabricTab(currentFabricTab);
 }
 
 async function loadIpam() {
@@ -2983,7 +3487,7 @@ async function ipamNextFree(subnetId, network) {
     const r = await api('GET', `/api/ipam/subnets/${subnetId}/next-free`);
     showToast(`Next free in ${network}: ${r.next_free}`, 'info');
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -2994,7 +3498,7 @@ async function deleteIpamSubnet(id) {
     showToast('Subnet deleted', 'success');
     loadIpamSubnets();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3050,7 +3554,7 @@ async function deleteIpamAddress(id) {
     loadIpamAddresses();
     loadIpamSubnets();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3077,7 +3581,7 @@ async function saveIpamAddressEdit() {
     loadIpamAddresses();
     loadIpamSubnets();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3114,7 +3618,7 @@ async function deleteIpamVlan(id) {
     showToast('VLAN deleted', 'success');
     loadIpamVlans();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3186,7 +3690,7 @@ async function submitIpamSubnet() {
     document.getElementById('ipam-subnet-modal').classList.add('hidden');
     loadIpamSubnets();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3200,12 +3704,12 @@ async function submitIpamAddress() {
   };
   try {
     await api('POST', '/api/ipam/addresses', payload);
-    showToast(`${payload.address} allocated`, 'success');
+    toast(`${payload.address} allocated`, 'success');
     document.getElementById('ipam-addr-modal').classList.add('hidden');
     loadIpamAddresses();
     loadIpamSubnets();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -3222,7 +3726,7 @@ async function submitIpamVlan() {
     document.getElementById('ipam-vlan-modal').classList.add('hidden');
     loadIpamVlans();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -4008,7 +4512,7 @@ async function submitLldTemplate() {
     closeLldModal();
     loadLldTemplates();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -4019,7 +4523,7 @@ async function deleteLldTemplate(id) {
     showToast('Template deleted', 'success');
     loadLldTemplates();
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   }
 }
 
@@ -4051,7 +4555,7 @@ async function runLldCheck() {
     document.getElementById('lld-run-modal').classList.add('hidden');
     showLldReport(result);
   } catch(e) {
-    showToast(e.message, 'error');
+    toast(e.message || 'Save failed', 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = '▶ Run Check';

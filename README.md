@@ -1,6 +1,6 @@
-# Network AI Orchestrator
+# NetOps
 
-AI-powered network management platform for MSPs and network engineers. Connect to your Cisco (and other) devices over SSH, run AI-driven analysis using Claude, and manage configurations — all from a single web UI.
+Network management and automation platform for MSPs and network engineers. Connect to your Cisco (and other) devices over SSH, run AI-driven analysis using Claude, and manage configurations — all from a single web UI.
 
 ## Features
 

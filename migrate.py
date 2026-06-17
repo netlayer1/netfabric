@@ -2,7 +2,7 @@
 migrate.py — Apply pending DB schema changes to PostgreSQL.
 
 Run inside the app container:
-    docker exec network-orchestrator-app python3 migrate.py
+    docker exec netops-app python3 migrate.py
 
 Or locally (requires DATABASE_URL pointing to an accessible host):
     DATABASE_URL=postgresql://netorch:someStrongPassword@localhost:5432/network_orchestrator python3 migrate.py

@@ -1,11 +1,11 @@
 version: "3.9"
 
-name: network-orchestrator
+name: netops
 
 services:
   db:
     image: postgres:16-alpine
-    container_name: network-orchestrator-db
+    container_name: netops-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -21,7 +21,7 @@ services:
 
   app:
     build: .
-    container_name: network-orchestrator-app
+    container_name: netops-app
     ports:
       - "8000:8000"
     env_file:

@@ -1,6 +1,6 @@
 """
 main.py — FastAPI application
-Network AI Orchestrator — SaaS MVP
+NetOps — Network Management & Automation Platform
 
 Routes:
   GET  /health                            — health check
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="Network AI Orchestrator",
+    title="NetOps",
     version="1.0.0",
     description="AI-powered network management for MSP clients",
     lifespan=lifespan,
@@ -318,7 +318,7 @@ def delete_device_group(
 def serve_frontend():
     if os.path.exists("frontend/index.html"):
         return FileResponse("frontend/index.html")
-    return {"message": "Network AI Orchestrator API", "docs": "/docs"}
+    return {"message": "NetOps API", "docs": "/docs"}
 
 
 # ─────────────────────────────────────────────
