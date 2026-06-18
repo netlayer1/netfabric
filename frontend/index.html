@@ -905,8 +905,8 @@
           </div>
           <!-- Tabs bar -->
           <div style="display:flex;gap:0;border-bottom:2px solid var(--border);width:100%;overflow-x:auto;">
-            <button class="fabric-tab active" id="fabric-tab-ip-addresses"  onclick="showFabricTab('ip-addresses')">IP Addresses</button>
-            <button class="fabric-tab"        id="fabric-tab-subnets"       onclick="showFabricTab('subnets')">Subnets</button>
+            <button class="fabric-tab active" id="fabric-tab-subnets"       onclick="showFabricTab('subnets')">Subnets</button>
+            <button class="fabric-tab"        id="fabric-tab-ip-addresses"  onclick="showFabricTab('ip-addresses')">IP Addresses</button>
             <button class="fabric-tab"        id="fabric-tab-vrfs"          onclick="showFabricTab('vrfs')">VRFs</button>
             <button class="fabric-tab"        id="fabric-tab-vlans"         onclick="showFabricTab('vlans')">VLANs</button>
             <button class="fabric-tab"        id="fabric-tab-vlan-groups"   onclick="showFabricTab('vlan-groups')">VLAN Groups</button>
@@ -2009,7 +2009,7 @@ function showPage(page) {
   if (page === 'device-groups') loadDeviceGroups();
   if (page === 'services')     loadServices();
   if (page === 'sync')         loadSync();
-  if (page === 'fabric')       showFabricTab('ip-addresses');
+  if (page === 'fabric')       showFabricTab('subnets');
   if (page === 'lld')          loadLldTemplates();
   if (page === 'neds')         loadNeds();
 }
