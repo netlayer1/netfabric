@@ -1,6 +1,6 @@
 """
 main.py — FastAPI application
-NetOps — Network Management & Automation Platform
+NetFabric — Network Management & Automation Platform
 
 Routes:
   GET  /health                            — health check
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="NetOps",
+    title="NetFabric",
     version="1.0.0",
     description="AI-powered network management for MSP clients",
     lifespan=lifespan,
@@ -318,7 +318,7 @@ def delete_device_group(
 def serve_frontend():
     if os.path.exists("frontend/index.html"):
         return FileResponse("frontend/index.html")
-    return {"message": "NetOps API", "docs": "/docs"}
+    return {"message": "NetFabric API", "docs": "/docs"}
 
 
 # ─────────────────────────────────────────────
@@ -1583,7 +1583,15 @@ def deploy_service(
         db.refresh(inst)
 
         if not result["success"]:
-            raise HTTPException(status_code=502, detail=result.get("error", "Deploy failed"))
+            # Return 200 with status="error" so the frontend can show the full device output
+            return ServiceDeployResponse(
+                status="error",
+                lines_sent=result["lines_sent"],
+                output=result.get("output", ""),
+                message=result.get("error", "Deploy failed"),
+                instance_id=inst.id,
+                transaction_id=txn_id,
+            )
 
         # ── Auto-snapshot: pull running config immediately after deploy ──
         # This keeps the stored baseline in sync with what the tool just pushed,
@@ -1615,6 +1623,35 @@ def deploy_service(
         )
     finally:
         _release_lock(payload.device_id, txn_id, db)
+
+
+@app.get("/api/logs")
+def list_deploy_logs(
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return recent service deploy instances with template + device info."""
+    rows = (
+        db.query(ServiceInstance)
+        .filter(ServiceInstance.user_id == current_user.id)
+        .order_by(ServiceInstance.deployed_at.desc())
+        .limit(limit)
+        .all()
+    )
+    result = []
+    for inst in rows:
+        svc = db.query(ServiceTemplate).filter(ServiceTemplate.id == inst.template_id).first()
+        dev = db.query(Device).filter(Device.id == inst.device_id).first()
+        result.append({
+            "id":            inst.id,
+            "service_name":  svc.name if svc else f"#{inst.template_id}",
+            "device_name":   dev.name if dev else f"#{inst.device_id}",
+            "status":        inst.status,
+            "output":        inst.output,
+            "deployed_at":   inst.deployed_at.isoformat() if inst.deployed_at else None,
+        })
+    return result
 
 
 # ─────────────────────────────────────────────

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NetOps</title>
+  <title>NetFabric</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
@@ -377,7 +377,7 @@
     .modal h3 { margin-bottom: 22px; font-size: 16px; font-weight: 700; }
     .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 
-    /* ── Network Fabric tabs ─────────────────── */
+    /* ── Network Resources tabs ─────────────────── */
     .fabric-tab {
       padding: 10px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
       border: none; background: transparent; color: var(--muted); font-family: inherit;
@@ -611,11 +611,11 @@
         <div class="login-logo-mark">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         </div>
-        <span class="login-logo-name">NetOps</span>
+        <span class="login-logo-name">NetFabric</span>
       </div>
 
       <h1>Welcome back</h1>
-      <p>Sign in to your NetOps account</p>
+      <p>Sign in to your NetFabric account</p>
 
       <div class="login-tabs">
         <button class="login-tab active" onclick="setAuthTab('login')">Sign In</button>
@@ -654,7 +654,7 @@
       <div class="topbar-logo-mark">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
       </div>
-      <strong>Net</strong>Ops
+      <span style="color:var(--accent)">NetFabric</span>
     </div>
     <div class="topbar-actions">
       <button class="topbar-btn" onclick="showPage('sync')">
@@ -696,13 +696,17 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span class="nav-label">Services</span>
         </div>
+        <div class="nav-item" data-page="logs" onclick="showPage('logs')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <span class="nav-label">Logs</span>
+        </div>
         <div class="nav-item" data-page="sync" onclick="showPage('sync')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span class="nav-label">Config Editor</span>
         </div>
         <div class="nav-item" data-page="fabric" onclick="showPage('fabric')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/><line x1="2" y1="15" x2="20" y2="15"/></svg>
-          <span class="nav-label">Network Fabric</span>
+          <span class="nav-label">Network Resources</span>
         </div>
         <div class="nav-item" data-page="lld" onclick="showPage('lld')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -771,7 +775,7 @@
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="2" y1="9" x2="20" y2="9"/></svg>
               </div>
               <div>
-                <div class="home-card-title">Network Fabric</div>
+                <div class="home-card-title">Network Resources</div>
                 <div class="home-card-sub">IPs, subnets, VLANs, VRFs &amp; sites</div>
               </div>
               <div class="home-card-arrow">→</div>
@@ -840,6 +844,20 @@
       </div>
 
       <!-- CONFIG EDITOR -->
+      <!-- ── Logs Page ─────────────────────────────────── -->
+      <div id="page-logs" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2 style="margin-bottom:2px;">Logs</h2>
+            <div class="text-muted text-sm">Service deploy history &amp; device output</div>
+          </div>
+          <button class="btn btn-ghost" onclick="loadLogs()">↺ Refresh</button>
+        </div>
+        <div class="page-content">
+          <div id="logs-list"><div class="text-muted text-sm">Loading…</div></div>
+        </div>
+      </div>
+
       <div id="page-sync" class="hidden">
         <div class="page-header">
           <h2>Config Editor</h2>
@@ -895,12 +913,12 @@
       </div>
 
       <!-- ══════════════════════════════════════════════ -->
-      <!-- Network Fabric Page (tabbed)                  -->
+      <!-- Network Resources Page (tabbed)                  -->
       <!-- ══════════════════════════════════════════════ -->
       <div id="page-fabric" class="hidden">
         <div class="page-header" style="flex-direction:column;align-items:flex-start;gap:0;padding-bottom:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;width:100%;padding-bottom:12px;">
-            <h2>Network Fabric</h2>
+            <h2>Network Resources</h2>
             <button class="btn btn-ghost" style="font-size:12px;" onclick="fabricTabRefresh()">↻ Refresh</button>
           </div>
           <!-- Tabs bar -->
@@ -1497,6 +1515,16 @@
       <label>Description</label>
       <input type="text" id="svc-desc" placeholder="Optional — what does this service do?" />
     </div>
+    <div class="form-group">
+      <label>Target NED <span class="text-muted" style="font-weight:400;">— CLI dialect for this service</span></label>
+      <select id="svc-ned-id">
+        <option value="">Any / Not specified</option>
+        <option value="cisco-ios-cli-1.0">Cisco IOS</option>
+        <option value="cisco-iosxr-cli-1.0">Cisco IOS-XR</option>
+        <option value="fortinet-fortios-cli-1.0">Fortinet FortiOS</option>
+        <option value="juniper-junos-cli-1.0">Juniper JunOS</option>
+      </select>
+    </div>
 
     <!-- Mode toggle (pill style, 3 tabs) -->
     <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;">
@@ -1527,9 +1555,9 @@
 
     <!-- CLI Paste panel -->
     <div id="svc-panel-cli" class="form-group hidden" style="flex:1;">
-      <label>Paste IOS CLI Config — values will be auto-detected as Jinja2 variables</label>
+      <label>Paste CLI Config — IOS or FortiOS syntax is auto-detected</label>
       <textarea id="svc-cli" style="font-family:monospace;font-size:12px;min-height:240px;resize:vertical;"
-        placeholder="interface Loopback0&#10; description Managed by NOC&#10; ip address 1.1.1.1 255.255.255.255&#10; no shutdown"></textarea>
+        placeholder="IOS example:&#10;interface Loopback0&#10; description Managed by NOC&#10; ip address 1.1.1.1 255.255.255.255&#10;&#10;FortiOS example:&#10;config system interface&#10;edit port3&#10;set description Managed by NOC&#10;next&#10;end"></textarea>
       <div class="text-muted text-sm" style="margin-top:6px;">IP addresses, interface names, and descriptions are auto-extracted as variables.</div>
       <button class="btn btn-primary" style="margin-top:10px;width:100%;" onclick="svcCliConvert()">⚙ Convert to Variables + Template</button>
     </div>
@@ -1895,7 +1923,7 @@ function showToast(message, type = 'info') {
 // State
 // ════════════════════════════════════════════════
 const API = '';   // Same origin — FastAPI serves the frontend
-let token = localStorage.getItem('netops_token') || '';
+let token = localStorage.getItem('netfabric_token') || '';
 let currentPage = 'dashboard';
 let devices = [];
 
@@ -1947,7 +1975,7 @@ async function authSubmit() {
     }
     const data = await res.json();
     token = data.access_token;
-    localStorage.setItem('netops_token', token);
+    localStorage.setItem('netfabric_token', token);
     initApp();
   } catch(e) {
     errEl.textContent = e.message;
@@ -1959,7 +1987,7 @@ async function authSubmit() {
 
 function logout() {
   token = '';
-  localStorage.removeItem('netops_token');
+  localStorage.removeItem('netfabric_token');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-page').classList.remove('hidden');
 }
@@ -1977,7 +2005,7 @@ async function initApp() {
     api('GET', '/api/authgroups').then(gs => { window._authgroupsCache = gs; }).catch(() => {});
     showPage('dashboard');
   } catch(e) {
-    token = ''; localStorage.removeItem('netops_token');
+    token = ''; localStorage.removeItem('netfabric_token');
   }
 }
 
@@ -2009,6 +2037,7 @@ function showPage(page) {
   if (page === 'devices')      loadDevices();
   if (page === 'device-groups') loadDeviceGroups();
   if (page === 'services')     loadServices();
+  if (page === 'logs')         loadLogs();
   if (page === 'sync')         loadSync();
   if (page === 'fabric')       showFabricTab('subnets');
   if (page === 'lld')          loadLldTemplates();
@@ -2354,6 +2383,73 @@ async function saveDevice() {
 
 
 // ════════════════════════════════════════════════
+// Logs
+async function loadLogs() {
+  const list = document.getElementById('logs-list');
+  list.innerHTML = '<div class="text-muted text-sm">Loading…</div>';
+  try {
+    const logs = await api('GET', '/api/logs');
+    if (!logs.length) {
+      list.innerHTML = '<div class="text-muted text-sm">No deploy logs yet.</div>';
+      return;
+    }
+    const ERROR_RE = /command fail|error|not found|must set|discard|invalid/i;
+    // Compact table view — click a row to expand output
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border);text-align:left;">
+            <th style="padding:6px 10px;font-weight:500;width:90px;">Status</th>
+            <th style="padding:6px 10px;font-weight:500;">Service</th>
+            <th style="padding:6px 10px;font-weight:500;">Device</th>
+            <th style="padding:6px 10px;font-weight:500;text-align:right;">Time</th>
+            <th style="padding:6px 4px;width:20px;"></th>
+          </tr>
+        </thead>
+        <tbody id="logs-tbody">
+          ${logs.map((log, i) => {
+            const isErr = log.status === 'error';
+            const badge = isErr
+              ? `<span style="color:var(--danger);font-weight:600;">✗ Error</span>`
+              : `<span style="color:#22c55e;font-weight:600;">✓ OK</span>`;
+            const ts = log.deployed_at ? new Date(log.deployed_at).toLocaleString() : '';
+            const hasOutput = !!(log.output || '').trim();
+            const outputHtml = hasOutput ? (log.output || '').split('\n').map(l => {
+              const color = ERROR_RE.test(l) ? 'var(--danger)' : /^FG\w* [(\w]/.test(l.trim()) ? 'var(--accent)' : 'var(--muted)';
+              return `<div style="color:${color};font-family:monospace;font-size:11px;white-space:pre;">${escHtml(l)}</div>`;
+            }).join('') : '';
+            return `
+              <tr class="log-row" onclick="toggleLogOutput(${i})" style="border-bottom:1px solid var(--border);cursor:${hasOutput ? 'pointer' : 'default'};transition:background 0.1s;"
+                  onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+                <td style="padding:7px 10px;">${badge}</td>
+                <td style="padding:7px 10px;font-weight:500;">${escHtml(log.service_name)}</td>
+                <td style="padding:7px 10px;color:var(--muted);">${escHtml(log.device_name)}</td>
+                <td style="padding:7px 10px;color:var(--muted);text-align:right;white-space:nowrap;">${ts}</td>
+                <td style="padding:7px 4px;color:var(--muted);font-size:10px;">${hasOutput ? '▶' : ''}</td>
+              </tr>
+              ${hasOutput ? `
+              <tr id="log-output-${i}" class="hidden">
+                <td colspan="5" style="padding:0;">
+                  <div style="padding:8px 14px;background:var(--surface);max-height:220px;overflow-y:auto;border-bottom:1px solid var(--border);">${outputHtml}</div>
+                </td>
+              </tr>` : ''}`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) { list.innerHTML = `<div class="text-muted text-sm">Failed to load logs: ${e.message}</div>`; }
+}
+
+function toggleLogOutput(i) {
+  const row = document.getElementById(`log-output-${i}`);
+  if (!row) return;
+  const open = !row.classList.contains('hidden');
+  row.classList.toggle('hidden', open);
+  // flip the arrow on the trigger row
+  const trigger = row.previousElementSibling;
+  const arrow = trigger ? trigger.querySelector('td:last-child') : null;
+  if (arrow) arrow.textContent = open ? '▶' : '▼';
+}
+
 // Services
 // ════════════════════════════════════════════════
 
@@ -2424,6 +2520,7 @@ async function openServiceModal(id = null) {
   document.getElementById('svc-modal-title').textContent = id ? 'Edit Service' : 'New Service';
   document.getElementById('svc-name').value     = '';
   document.getElementById('svc-desc').value     = '';
+  document.getElementById('svc-ned-id').value   = '';
   document.getElementById('svc-schema').value   = '';
   document.getElementById('svc-template').value = '';
   document.getElementById('svc-cli').value      = '';
@@ -2433,6 +2530,7 @@ async function openServiceModal(id = null) {
       const svc = await api('GET', `/api/services/${id}`);
       document.getElementById('svc-name').value     = svc.name;
       document.getElementById('svc-desc').value     = svc.description;
+      document.getElementById('svc-ned-id').value   = svc.ned_id || '';
       document.getElementById('svc-schema').value   = svc.variables_schema;
       document.getElementById('svc-template').value = svc.template_body;
     } catch(e) { showToast('Failed to load service', 'error'); return; }
@@ -2450,6 +2548,7 @@ async function saveSvcTemplate() {
   const payload = {
     name:             document.getElementById('svc-name').value.trim(),
     description:      document.getElementById('svc-desc').value.trim(),
+    ned_id:           document.getElementById('svc-ned-id').value || null,
     variables_schema: document.getElementById('svc-schema').value,
     template_body:    document.getElementById('svc-template').value,
   };
@@ -2487,25 +2586,105 @@ function svcCliConvert() {
   const raw = document.getElementById('svc-cli').value;
   if (!raw.trim()) { showToast('Paste some CLI config first', 'error'); return; }
 
-  const vars     = {};   // varName → defaultValue (insertion-ordered)
-  const tplLines = [];
-  const SKIP_RE  = /^(current configuration|building configuration|end\s*$|!)/i;
-  const IP_RE    = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/;
+  // Always auto-detect syntax from content — NED selection doesn't force a parser.
+  // FortiOS: non-indented "config <context>" alongside "edit" or "set" lines.
+  const fortiOSBySniff = /^config\s+\S/m.test(raw) && (/^edit\s+/m.test(raw) || /^set\s+/m.test(raw));
 
-  // Sanitize to valid Jinja2 variable name
+  if (fortiOSBySniff) {
+    _svcCliConvertFortiOS(raw);
+  } else {
+    _svcCliConvertIOS(raw);
+  }
+}
+
+// ── FortiOS converter ─────────────────────────────────────────────────────────
+function _svcCliConvertFortiOS(raw) {
+  const vars     = {};
+  const tplLines = [];
+  const IP_RE    = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
+
   function toVarName(s) {
     return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   }
-
-  // Register var; return the name used
   function setVar(name, defaultVal) {
     name = toVarName(name);
     if (!(name in vars)) vars[name] = defaultVal;
     return name;
   }
+  function stripQuotes(s) { return s.replace(/^["']|["']$/g, '').trim(); }
 
-  // Replace every IP address in `text` with {{ varBaseName }} / {{ varBaseName_1 }} …
-  // Non-IP tokens are left untouched.
+  // Track edit-context so we can name the variable sensibly
+  // e.g. inside "config system interface" the edit target is the interface name
+  let configContext = '';
+
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // config <context> — block opener, keep verbatim
+    const configM = line.match(/^config\s+(.+)/i);
+    if (configM) {
+      configContext = configM[1].trim();
+      tplLines.push(`config ${configM[1]}`);
+      continue;
+    }
+
+    // edit <value> — object key; parameterize the value
+    const editM = line.match(/^edit\s+(.+)/i);
+    if (editM) {
+      const val   = stripQuotes(editM[1]);
+      // derive a meaningful var name from context (last word of "config system interface" → "interface_name")
+      const ctx   = configContext.split(/\s+/).pop() || 'name';
+      const vname = setVar(`${toVarName(ctx)}_name`, val);
+      tplLines.push(`edit {{ ${vname} }}`);
+      continue;
+    }
+
+    // set <key> <value> — parameterize ALL set fields
+    // Keywords with no meaningful value to vary are kept verbatim (enable/disable/always/accept/deny)
+    const STATIC_VALUES = /^(enable|disable|always|never|accept|deny|all)$/i;
+    const setM = line.match(/^set\s+(\S+)\s+(.*)/i);
+    if (setM) {
+      const key = setM[1];
+      const val = stripQuotes(setM[2].trim());
+      if (STATIC_VALUES.test(val)) {
+        // Fixed keyword — keep as-is
+        tplLines.push(line);
+      } else {
+        const vname = setVar(toVarName(key), val);
+        tplLines.push(`set ${key} {{ ${vname} }}`);
+      }
+      continue;
+    }
+
+    // next / end / standalone keywords — keep verbatim
+    tplLines.push(line);
+  }
+
+  const schema = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join('\n');
+  document.getElementById('svc-schema').value   = schema;
+  document.getElementById('svc-template').value = tplLines.join('\n');
+
+  const count = Object.keys(vars).length;
+  showToast(`Converted (FortiOS) — ${count} variable${count !== 1 ? 's' : ''} extracted`, 'success');
+  svcSwitchTab('vars');
+}
+
+// ── IOS / IOS-XE converter (original) ────────────────────────────────────────
+function _svcCliConvertIOS(raw) {
+  const vars     = {};
+  const tplLines = [];
+  const SKIP_RE  = /^(current configuration|building configuration|end\s*$|!)/i;
+  const IP_RE    = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/;
+
+  function toVarName(s) {
+    return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+  function setVar(name, defaultVal) {
+    name = toVarName(name);
+    if (!(name in vars)) vars[name] = defaultVal;
+    return name;
+  }
   function parameteriseIPs(text, baseName) {
     let idx = 0;
     return text.replace(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/g, (ip) => {
@@ -2522,7 +2701,6 @@ function svcCliConvert() {
     if (!line || SKIP_RE.test(line)) continue;
 
     if (!isChild) {
-      // ── interface <Type><Num>  e.g. "interface Loopback0", "interface GigabitEthernet0/1" ──
       const ifM = line.match(/^interface\s+([A-Za-z\-]+)\s*([\d\/\.]+(?:\.\d+)?)/i);
       if (ifM) {
         const vname = setVar('name', ifM[2].trim());
@@ -2530,7 +2708,6 @@ function svcCliConvert() {
         continue;
       }
 
-      // ── router <protocol> [process-id/ASN]  e.g. "router ospf 1", "router bgp 65000" ──
       const rtrM = line.match(/^router\s+(\S+)(?:\s+(\d+))?/i);
       if (rtrM) {
         if (rtrM[2] !== undefined) {
@@ -2542,7 +2719,6 @@ function svcCliConvert() {
         continue;
       }
 
-      // ── Generic top-level: parameterise IPs if any, keep the rest ──
       if (IP_RE.test(line)) {
         const kwM = line.match(/^(\S+)\s+(.*)/);
         if (kwM) {
@@ -2554,9 +2730,6 @@ function svcCliConvert() {
       tplLines.push(line);
 
     } else {
-      // ── Child (indented) commands ──────────────────────────
-
-      // "ip address A.B.C.D M.M.M.M"
       const ipAddrM = line.match(/^ip address\s+(\S+)\s+(\S+)/i);
       if (ipAddrM) {
         const iv = setVar('ip_address', ipAddrM[1]);
@@ -2565,7 +2738,6 @@ function svcCliConvert() {
         continue;
       }
 
-      // "no ip address" → parameterise
       if (/^no ip address$/i.test(line)) {
         const iv = setVar('ip_address', '');
         const mv = setVar('netmask', '255.255.255.255');
@@ -2573,7 +2745,6 @@ function svcCliConvert() {
         continue;
       }
 
-      // "description TEXT"
       const descM = line.match(/^description\s+(.*)/i);
       if (descM) {
         const vname = setVar('description', descM[1]);
@@ -2581,9 +2752,6 @@ function svcCliConvert() {
         continue;
       }
 
-      // Generic child: "keyword [rest with IPs]"
-      // e.g. "router-id 1.1.1.1" → {{ router_id }}
-      //      "network 10.0.0.0 0.0.0.255 area 0" → {{ network }} {{ network_1 }} area 0
       if (IP_RE.test(line)) {
         const kwM = line.match(/^([\w\-]+)\s+(.*)/);
         if (kwM) {
@@ -2593,7 +2761,6 @@ function svcCliConvert() {
         }
       }
 
-      // Fallback: keep as-is
       tplLines.push(' ' + line);
     }
   }
@@ -2762,16 +2929,75 @@ async function deployService() {
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
   if (!deviceId) { showToast('Select a device', 'error'); return; }
 
-  const btn = document.getElementById('svc-deploy-btn');
-  btn.disabled = true; btn.textContent = 'Deploying…';
+  const btn        = document.getElementById('svc-deploy-btn');
+  const varValues  = _collectVarValues();
 
+  btn.disabled = true; btn.textContent = 'Checking…';
+
+  // ── Pre-deploy existence check ──────────────────────────────────────────────
+  try {
+    const check = await api('POST', `/api/services/${_svcDeployId}/dry-run`, {
+      device_id:       deviceId,
+      variable_values: varValues,
+    });
+
+    const total    = check.lines.length;
+    const existing = check.exists_count;
+
+    if (existing === total) {
+      // Every line already exists — nothing to do
+      showToast('Config already exists on device — nothing to deploy', 'info');
+      btn.disabled = false; btn.textContent = '▶ Deploy to Device';
+      return;
+    }
+
+    if (existing > 0) {
+      // Partial overlap — ask for confirmation
+      const ok = confirm(
+        `${existing} of ${total} config lines already exist on the device.\n` +
+        `Deploy the ${total - existing} new line(s) anyway?`
+      );
+      if (!ok) {
+        btn.disabled = false; btn.textContent = '▶ Deploy to Device';
+        return;
+      }
+    }
+  } catch(e) {
+    // Dry-run failed (device unreachable etc.) — ask user whether to proceed
+    const ok = confirm(`Pre-deploy check failed: ${e.message}\n\nDeploy anyway?`);
+    if (!ok) {
+      btn.disabled = false; btn.textContent = '▶ Deploy to Device';
+      return;
+    }
+  }
+
+  // ── Deploy ──────────────────────────────────────────────────────────────────
+  btn.textContent = 'Deploying…';
   try {
     const resp = await api('POST', `/api/services/${_svcDeployId}/deploy`, {
       device_id:       deviceId,
-      variable_values: _collectVarValues(),
+      variable_values: varValues,
     });
-    showToast(`Deployed — ${resp.lines_sent} commands sent`, 'success');
-    closeSvcDeployModal();
+
+    const isError = resp.status === 'error';
+    showToast(isError ? `Deploy errors — check output` : `Deployed — ${resp.lines_sent} commands sent`,
+              isError ? 'error' : 'success');
+
+    // Show device output with line-by-line highlighting
+    const resultsEl = document.getElementById('svc-dryrun-results');
+    if (resultsEl && resp.output) {
+      const ERROR_RE = /command fail|error|not found|must set|discard|invalid/i;
+      const lines = resp.output.split('\n').map(l => {
+        const isErr = ERROR_RE.test(l);
+        const isPrompt = /^FG\w* [(\w]/.test(l.trim());
+        const color = isErr ? 'var(--danger)' : isPrompt ? 'var(--accent)' : 'var(--text)';
+        return `<div style="color:${color};font-family:monospace;font-size:11px;white-space:pre;">${escHtml(l)}</div>`;
+      }).join('');
+      resultsEl.innerHTML = `<div style="padding:10px 14px;">${lines}</div>`;
+    }
+
+    btn.disabled = false; btn.textContent = '▶ Deploy to Device';
+    return;
   } catch(e) { showToast(e.message || 'Deploy failed', 'error'); }
   finally { btn.disabled = false; btn.textContent = '▶ Deploy to Device'; }
 }
@@ -3253,6 +3479,8 @@ function viewBackup(idx) {
   const label = new Date(s.fetched_at + 'Z').toLocaleString();
   document.getElementById('config-modal-title').textContent = `Backup — ${label}`;
   cancelEditConfig();
+  // Set device ID so Live Status button works from the backup view
+  _configModalDeviceId = _backupsDeviceId;
   // Hide edit buttons — this is a read-only diff view
   document.getElementById('config-btn-edit').classList.add('hidden');
   closeBackupsModal();
@@ -3532,7 +3760,7 @@ function ipamTab(tab) {
 }
 
 // ════════════════════════════════════════════════
-// Network Fabric tabs
+// Network Resources tabs
 // ════════════════════════════════════════════════
 const FABRIC_TABS = ['ip-addresses','subnets','vrfs','vlans','vlan-groups','sites','datacenters'];
 let currentFabricTab = 'ip-addresses';

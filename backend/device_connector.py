@@ -100,16 +100,49 @@ def apply_config_set(
     driver = get_driver(device_type)
     params = driver.get_connection_params(host, username, password, port, timeout)
     timestamp = datetime.utcnow().isoformat()
+    print(f"[DEBUG] apply_config_set called: device_type={device_type!r} host={host} lines={len(config_lines)}", flush=True)
+    print(f"[DEBUG] params device_type={params.get('device_type')!r}", flush=True)
     logger.info(f"Applying {len(config_lines)} config lines to {host}:{port}")
+
+    # FortiOS uses a hierarchical prompt that changes inside config blocks
+    # (e.g. "FG1 (firewall policy) #"), which breaks send_config_set's and
+    # send_multiline's prompt detection. Write all lines directly to the SSH
+    # channel in one shot and read back with a timer instead.
+    is_fortios = params.get("device_type") == "fortinet"
+    print(f"[DEBUG] is_fortios={is_fortios}", flush=True)
 
     try:
         with ConnectHandler(**params) as conn:
-            output = conn.send_config_set(
-                config_lines,
-                enter_config_mode=True,
-                exit_config_mode=True,
-                read_timeout=60,
-            )
+            if is_fortios:
+                import time
+                payload = "\n".join(config_lines) + "\n"
+                logger.info(
+                    f"[FortiOS] Sending {len(config_lines)} lines to {host}:\n"
+                    + "\n".join(f"  {i+1:02d}| {l}" for i, l in enumerate(config_lines))
+                )
+                conn.write_channel(payload)
+                time.sleep(max(2, len(config_lines) * 0.3))
+                output = conn.read_channel()
+                logger.info(f"[FortiOS] Raw device response from {host}:\n{output}")
+                # Surface FortiOS errors so the caller can flag failure
+                if "Command fail" in output or "object check operator error" in output:
+                    error_lines = [l.strip() for l in output.splitlines()
+                                   if any(k in l for k in ("Command fail", "error", "not found", "Must set"))]
+                    logger.warning(f"[FortiOS] Errors detected: {error_lines}")
+                    return {
+                        "success": False,
+                        "lines_sent": len(config_lines),
+                        "output": output,
+                        "error": " | ".join(error_lines),
+                        "timestamp": timestamp,
+                    }
+            else:
+                output = conn.send_config_set(
+                    config_lines,
+                    enter_config_mode=True,
+                    exit_config_mode=True,
+                    read_timeout=60,
+                )
             save_cmd = driver.save_config_command()
             if save_cmd:
                 try:

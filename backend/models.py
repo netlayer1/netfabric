@@ -361,6 +361,9 @@ class ServiceTemplate(Base):
     user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
     name          = Column(String, nullable=False)
     description   = Column(String, default="")
+    # NED this template targets — used to select the right CLI dialect
+    # e.g. "fortinet-fortios-cli-1.0", "cisco-ios-cli-1.0"
+    ned_id        = Column(String, nullable=True)
     # Jinja2 template that renders to CLI commands (one per line)
     template_body = Column(Text, nullable=False, default="")
     # YAML that defines variable schema:
@@ -398,6 +401,7 @@ class ServiceInstance(Base):
 class ServiceTemplateCreate(BaseModel):
     name: str
     description: str = ""
+    ned_id: Optional[str] = None
     template_body: str
     variables_schema: str   # raw YAML text
 
@@ -405,6 +409,7 @@ class ServiceTemplateCreate(BaseModel):
 class ServiceTemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    ned_id: Optional[str] = None
     template_body: Optional[str] = None
     variables_schema: Optional[str] = None
 
@@ -413,6 +418,7 @@ class ServiceTemplateResponse(BaseModel):
     id: int
     name: str
     description: str
+    ned_id: Optional[str] = None
     template_body: str
     variables_schema: str
     created_at: datetime

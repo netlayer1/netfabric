@@ -2,7 +2,7 @@
 migrate.py — Apply pending DB schema changes to PostgreSQL.
 
 Run inside the app container:
-    docker exec netops-app python3 migrate.py
+    docker exec netfabric-app python3 migrate.py
 
 Or locally (requires DATABASE_URL pointing to an accessible host):
     DATABASE_URL=postgresql://netorch:someStrongPassword@localhost:5432/network_orchestrator python3 migrate.py
@@ -216,6 +216,13 @@ if not col_exists("ipam_vlans", "vlan_group_id"):
             "Added ipam_vlans.vlan_group_id column")
 else:
     print("✓ ipam_vlans.vlan_group_id already exists")
+
+# ── 13. service_templates.ned_id column ──────────────────────────────────────
+if not col_exists("service_templates", "ned_id"):
+    execute("ALTER TABLE service_templates ADD COLUMN ned_id TEXT",
+            "Added service_templates.ned_id column")
+else:
+    print("✓ service_templates.ned_id already exists")
 
 commit()
 close()
