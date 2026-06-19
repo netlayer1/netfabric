@@ -4,8 +4,8 @@ models.py — SQLAlchemy DB models + Pydantic request/response schemas
 
 import uuid
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from typing import Optional, List
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, EmailStr
 
@@ -467,3 +467,162 @@ class ServiceDryRunResponse(BaseModel):
     new_count: int
     exists_count: int
     device_name: str
+
+
+# ── Network as Code — State Management ───────────────────────────────────────
+
+class StateDeclaration(Base):
+    """
+    Desired state declaration — the authoritative intent for a service on a device.
+    This is what the network *should* look like. Source of truth can be the UI or a
+    git-managed YAML file. NetFabric compares this against the live device to
+    compute plans and detect drift.
+
+    Status lifecycle:
+        pending   — declared but never applied
+        applied   — last apply succeeded; known_state_hash matches desired
+        drifted   — device diverged from known state (manual change detected)
+        error     — last apply failed
+    """
+    __tablename__ = "state_declarations"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    user_id             = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name                = Column(String, nullable=False)          # human label, e.g. "lan-to-wan-policy"
+    service_template_id = Column(Integer, ForeignKey("service_templates.id"), nullable=False)
+    device_id           = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    # Desired variable values (JSON) — the intent
+    variables           = Column(JSON, nullable=False, default=dict)
+    # Source: 'ui' (created via UI) or 'git' (imported from YAML)
+    source              = Column(String, default="ui")
+    # Path in git repo when source='git', e.g. "services/lan-to-wan.yaml"
+    git_path            = Column(String, nullable=True)
+    # Status of this declaration
+    status              = Column(String, default="pending")       # pending|applied|drifted|error
+    # Hash of variables at last successful apply — used to detect desired-state changes
+    last_applied_hash   = Column(String, nullable=True)
+    # Rendered CLI lines that were last successfully applied (for drift comparison)
+    last_applied_config = Column(Text, nullable=True)
+    last_plan_at        = Column(DateTime, nullable=True)
+    last_applied_at     = Column(DateTime, nullable=True)
+    created_at          = Column(DateTime, default=datetime.utcnow)
+    updated_at          = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user     = relationship("User")
+    template = relationship("ServiceTemplate")
+    device   = relationship("Device")
+    plans    = relationship("StatePlan", back_populates="declaration", cascade="all, delete")
+
+
+class StatePlan(Base):
+    """
+    A computed plan — the diff between desired state and the live device.
+    Plans are immutable once created; applying a plan creates a new one on next run.
+
+    Status:
+        pending   — computed, not yet applied
+        applied   — was used to drive an apply operation
+        superseded — a newer plan exists for this declaration
+        failed    — apply attempt failed
+    """
+    __tablename__ = "state_plans"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    declaration_id = Column(Integer, ForeignKey("state_declarations.id"), nullable=False)
+    user_id        = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Structured diff data
+    lines_to_add   = Column(JSON, default=list)   # config lines not yet on device
+    lines_existing = Column(JSON, default=list)   # lines already present (no-op)
+    # Human-readable summary
+    summary        = Column(Text, default="")
+    # Status
+    status         = Column(String, default="pending")  # pending|applied|superseded|failed
+    # If applied: the deploy output and transaction id
+    apply_output   = Column(Text, nullable=True)
+    transaction_id = Column(String, nullable=True)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+    applied_at     = Column(DateTime, nullable=True)
+
+    declaration = relationship("StateDeclaration", back_populates="plans")
+    user        = relationship("User")
+
+
+# ── State Pydantic Schemas ────────────────────────────────────────────────────
+
+class StateDeclarationCreate(BaseModel):
+    name: str
+    service_template_id: int
+    device_id: int
+    variables: dict
+    source: str = "ui"
+    git_path: Optional[str] = None
+
+
+class StateDeclarationUpdate(BaseModel):
+    name: Optional[str] = None
+    variables: Optional[dict] = None
+
+
+class StateDeclarationResponse(BaseModel):
+    id: int
+    name: str
+    service_template_id: int
+    device_id: int
+    variables: dict
+    source: str
+    git_path: Optional[str] = None
+    status: str
+    last_plan_at: Optional[datetime] = None
+    last_applied_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    # Enriched fields (joined)
+    template_name: Optional[str] = None
+    device_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StatePlanResponse(BaseModel):
+    id: int
+    declaration_id: int
+    lines_to_add: List[str]
+    lines_existing: List[str]
+    summary: str
+    status: str
+    apply_output: Optional[str] = None
+    transaction_id: Optional[str] = None
+    created_at: datetime
+    applied_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StateApplyResponse(BaseModel):
+    status: str          # applied | no-change | error
+    plan_id: int
+    lines_sent: int
+    output: str
+    message: str
+    transaction_id: Optional[str] = None
+
+
+class StateImportItem(BaseModel):
+    """Single YAML declaration item for bulk import."""
+    name: str
+    service_template: str   # template name (looked up by name)
+    device: str             # device name (looked up by name)
+    variables: dict
+    git_path: Optional[str] = None
+
+
+class StateImportRequest(BaseModel):
+    declarations: List[StateImportItem]
+
+
+class StateImportResponse(BaseModel):
+    created: int
+    updated: int
+    errors: List[str]

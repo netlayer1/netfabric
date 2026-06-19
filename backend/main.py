@@ -75,6 +75,10 @@ from backend.models import (
     ServicePreviewRequest, ServicePreviewResponse,
     ServiceDeployRequest, ServiceDeployResponse,
     ServiceDryRunRequest, ServiceDryRunResponse, DryRunLine,
+    StateDeclaration, StatePlan,
+    StateDeclarationCreate, StateDeclarationUpdate, StateDeclarationResponse,
+    StatePlanResponse, StateApplyResponse,
+    StateImportRequest, StateImportResponse,
 )
 from backend.auth import (
     hash_password, verify_password,
@@ -86,6 +90,7 @@ from backend.ipam_models import Vlan, Subnet, IPAddress
 from backend.ipam_router import router as ipam_router
 from backend.lld_models import LLDTemplate, LLDCheckHistory
 from backend.lld_router import router as lld_router
+from backend.config_loader import reload_all as _reload_all
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,6 +104,18 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
+    # Auto-load Network as Code files from config/ on startup
+    try:
+        db = next(get_db())
+        # Load for every user that exists (multi-user: each user owns their files)
+        from backend.models import User as _User
+        users = db.query(_User).all()
+        for u in users:
+            result = _reload_all(db, u.id)
+            logger.info(f"[startup] Config reload for user {u.id}: {result}")
+        db.close()
+    except Exception as e:
+        logger.warning(f"[startup] Config file reload skipped: {e}")
     yield
 
 app = FastAPI(
@@ -131,6 +148,22 @@ if os.path.exists("frontend"):
 @app.get("/health")
 def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/reload")
+def reload_config_files(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Reload Network as Code files from config/services/, config/instances/, config/lld/.
+    Call this after editing files — no container restart needed (config/ is mounted).
+    """
+    try:
+        result = _reload_all(db, current_user.id)
+        return {"status": "ok", "result": result}
+    except Exception as e:
+        raise HTTPException(500, f"Reload failed: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -1380,6 +1413,38 @@ def list_service_templates(
     )
 
 
+def _write_service_file(svc: ServiceTemplate) -> None:
+    """Write a service template to config/services/<slug>.yaml (git source of truth)."""
+    from backend.config_loader import CONFIG_DIR
+    try:
+        schema = yaml.safe_load(svc.variables_schema) or {}
+    except Exception:
+        schema = {}
+    doc = {
+        "name":        svc.name,
+        "ned_id":      svc.ned_id or "",
+        "description": svc.description or "",
+        "variables":   schema,
+        "template":    svc.template_body,
+    }
+    slug = svc.name.lower().replace(" ", "-").replace("/", "-")
+    out_dir = CONFIG_DIR / "services"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / f"{slug}.yaml", "w") as f:
+        yaml.dump(doc, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    logger.info(f"[NaC] Wrote config/services/{slug}.yaml")
+
+
+def _delete_service_file(svc: ServiceTemplate) -> None:
+    """Remove the config/services/<slug>.yaml file when a service is deleted."""
+    from backend.config_loader import CONFIG_DIR
+    slug = svc.name.lower().replace(" ", "-").replace("/", "-")
+    path = CONFIG_DIR / "services" / f"{slug}.yaml"
+    if path.exists():
+        path.unlink()
+        logger.info(f"[NaC] Deleted config/services/{slug}.yaml")
+
+
 @app.post("/api/services", response_model=ServiceTemplateResponse, status_code=201)
 def create_service_template(
     payload: ServiceTemplateCreate,
@@ -1443,6 +1508,46 @@ def delete_service_template(
         raise HTTPException(status_code=404, detail="Service template not found")
     db.delete(svc)
     db.commit()
+
+
+@app.post("/api/services/{svc_id}/export-to-file")
+def export_service_to_file(
+    svc_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Write this service template to config/services/<slug>.yaml so it can be committed to git."""
+    from backend.config_loader import CONFIG_DIR
+    svc = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == svc_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not svc:
+        raise HTTPException(404, "Service not found")
+
+    # Parse existing schema back to dict for clean YAML output
+    try:
+        schema = yaml.safe_load(svc.variables_schema) or {}
+    except Exception:
+        schema = {}
+
+    doc = {
+        "name":        svc.name,
+        "ned_id":      svc.ned_id or "",
+        "description": svc.description or "",
+        "variables":   schema,
+        "template":    svc.template_body,
+    }
+
+    slug = svc.name.lower().replace(" ", "-").replace("/", "-")
+    out_dir = CONFIG_DIR / "services"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{slug}.yaml"
+
+    with open(out_path, "w") as f:
+        yaml.dump(doc, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return {"status": "ok", "file": str(out_path.relative_to(CONFIG_DIR.parent))}
 
 
 @app.post("/api/services/{svc_id}/preview", response_model=ServicePreviewResponse)
@@ -1652,6 +1757,452 @@ def list_deploy_logs(
             "deployed_at":   inst.deployed_at.isoformat() if inst.deployed_at else None,
         })
     return result
+
+
+# ─────────────────────────────────────────────
+# Network as Code — State Management
+# ─────────────────────────────────────────────
+
+import hashlib
+
+def _hash_variables(variables: dict) -> str:
+    """Stable hash of variable values for drift detection."""
+    serialized = json.dumps(variables, sort_keys=True)
+    return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+
+
+def _render_template_lines(template_body: str, variables: dict) -> list[str]:
+    """Render a Jinja2 service template and return config lines."""
+    env = Environment(undefined=StrictUndefined)
+    tmpl = env.from_string(template_body)
+    rendered = tmpl.render(**variables)
+    return [l for l in rendered.splitlines() if l.strip()]
+
+
+def _compute_plan(template_body: str, variables: dict, live_config: str) -> dict:
+    """
+    Diff desired config lines against live device config.
+    Returns lines_to_add (not yet on device) and lines_existing (already there).
+    """
+    desired_lines = _render_template_lines(template_body, variables)
+    live_lines_set = set(l.strip() for l in live_config.splitlines() if l.strip())
+    lines_to_add   = [l for l in desired_lines if l.strip() not in live_lines_set]
+    lines_existing = [l for l in desired_lines if l.strip() in live_lines_set]
+    return {"lines_to_add": lines_to_add, "lines_existing": lines_existing}
+
+
+@app.get("/api/state", response_model=List[StateDeclarationResponse])
+def list_state_declarations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all desired-state declarations for the current user."""
+    rows = (
+        db.query(StateDeclaration)
+        .filter(StateDeclaration.user_id == current_user.id)
+        .order_by(StateDeclaration.created_at.desc())
+        .all()
+    )
+    result = []
+    for d in rows:
+        r = StateDeclarationResponse.model_validate(d)
+        r.template_name = d.template.name if d.template else None
+        r.device_name   = d.device.name   if d.device   else None
+        result.append(r)
+    return result
+
+
+@app.post("/api/state", response_model=StateDeclarationResponse, status_code=201)
+def create_state_declaration(
+    body: StateDeclarationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Declare desired state — what a service should look like on a device."""
+    # Validate template + device belong to user
+    tmpl = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == body.service_template_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not tmpl:
+        raise HTTPException(404, "Service template not found")
+    dev = db.query(Device).filter(
+        Device.id == body.device_id,
+        Device.user_id == current_user.id,
+    ).first()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    decl = StateDeclaration(
+        user_id             = current_user.id,
+        name                = body.name,
+        service_template_id = body.service_template_id,
+        device_id           = body.device_id,
+        variables           = body.variables,
+        source              = body.source,
+        git_path            = body.git_path,
+        status              = "pending",
+    )
+    db.add(decl)
+    db.commit()
+    db.refresh(decl)
+    r = StateDeclarationResponse.model_validate(decl)
+    r.template_name = tmpl.name
+    r.device_name   = dev.name
+    return r
+
+
+@app.get("/api/state/{decl_id}", response_model=StateDeclarationResponse)
+def get_state_declaration(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+    r = StateDeclarationResponse.model_validate(decl)
+    r.template_name = decl.template.name if decl.template else None
+    r.device_name   = decl.device.name   if decl.device   else None
+    return r
+
+
+@app.put("/api/state/{decl_id}", response_model=StateDeclarationResponse)
+def update_state_declaration(
+    decl_id: int,
+    body: StateDeclarationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+    if body.name is not None:
+        decl.name = body.name
+    if body.variables is not None:
+        decl.variables = body.variables
+        # Mark pending if variables changed and was previously applied
+        if decl.status == "applied":
+            decl.status = "pending"
+    db.commit()
+    db.refresh(decl)
+    r = StateDeclarationResponse.model_validate(decl)
+    r.template_name = decl.template.name if decl.template else None
+    r.device_name   = decl.device.name   if decl.device   else None
+    return r
+
+
+@app.delete("/api/state/{decl_id}", status_code=204)
+def delete_state_declaration(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+    db.delete(decl)
+    db.commit()
+
+
+@app.post("/api/state/{decl_id}/plan", response_model=StatePlanResponse)
+def plan_state_declaration(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Compute a plan: diff desired state against the live device config.
+    Supersedes any previous pending plan for this declaration.
+    """
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+
+    tmpl = decl.template
+    dev  = decl.device
+
+    # Pull live config from device — use long timeout, show full-configuration can be slow
+    username, creds = _resolve_device_credentials(dev, db)
+    result = device_connector.pull_device_data(
+        host=dev.host, username=username, password=creds,
+        device_type=dev.device_type, port=dev.port, analysis_type="config_backup",
+        timeout=60,
+    )
+    if not result["success"]:
+        raise HTTPException(502, f"Could not reach device: {result['error']}")
+    live_config = result["data"]
+
+    # Compute diff
+    diff = _compute_plan(tmpl.template_body, decl.variables, live_config)
+    add_count = len(diff["lines_to_add"])
+    exist_count = len(diff["lines_existing"])
+    summary = (
+        f"{add_count} line(s) to add, {exist_count} line(s) already present"
+        if add_count else f"No changes needed — all {exist_count} line(s) already on device"
+    )
+
+    # Supersede previous pending plans
+    db.query(StatePlan).filter(
+        StatePlan.declaration_id == decl_id,
+        StatePlan.status == "pending",
+    ).update({"status": "superseded"})
+
+    plan = StatePlan(
+        declaration_id = decl_id,
+        user_id        = current_user.id,
+        lines_to_add   = diff["lines_to_add"],
+        lines_existing = diff["lines_existing"],
+        summary        = summary,
+        status         = "pending",
+    )
+    db.add(plan)
+    decl.last_plan_at = datetime.utcnow()
+    db.commit()
+    db.refresh(plan)
+    return StatePlanResponse.model_validate(plan)
+
+
+@app.post("/api/state/{decl_id}/apply", response_model=StateApplyResponse)
+def apply_state_declaration(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Apply the latest pending plan for this declaration.
+    If all lines already exist, returns no-change without touching the device.
+    """
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+
+    # Get latest pending plan
+    plan = (
+        db.query(StatePlan)
+        .filter(StatePlan.declaration_id == decl_id, StatePlan.status == "pending")
+        .order_by(StatePlan.created_at.desc())
+        .first()
+    )
+    if not plan:
+        raise HTTPException(400, "No pending plan — run /plan first")
+
+    if not plan.lines_to_add:
+        # Nothing to do
+        plan.status    = "applied"
+        plan.applied_at = datetime.utcnow()
+        decl.status    = "applied"
+        decl.last_applied_at   = datetime.utcnow()
+        decl.last_applied_hash = _hash_variables(decl.variables)
+        decl.last_applied_config = "\n".join(plan.lines_existing)
+        db.commit()
+        return StateApplyResponse(
+            status="no-change", plan_id=plan.id, lines_sent=0,
+            output="All lines already present on device", message="No changes needed",
+        )
+
+    dev   = decl.device
+    username, creds = _resolve_device_credentials(dev, db)
+    txn   = str(uuid.uuid4())
+
+    push = device_connector.apply_config_set(
+        host=dev.host, username=username, password=creds,
+        config_lines=plan.lines_to_add,
+        device_type=dev.device_type, port=dev.port,
+    )
+
+    if push["success"]:
+        plan.status        = "applied"
+        plan.apply_output  = push.get("output", "")
+        plan.transaction_id = txn
+        plan.applied_at    = datetime.utcnow()
+        decl.status        = "applied"
+        decl.last_applied_at   = datetime.utcnow()
+        decl.last_applied_hash = _hash_variables(decl.variables)
+        decl.last_applied_config = "\n".join(plan.lines_to_add + plan.lines_existing)
+        db.commit()
+        return StateApplyResponse(
+            status="applied", plan_id=plan.id,
+            lines_sent=push["lines_sent"],
+            output=push.get("output", ""),
+            message="State applied successfully",
+            transaction_id=txn,
+        )
+    else:
+        plan.status       = "failed"
+        plan.apply_output = push.get("output", "")
+        decl.status       = "error"
+        db.commit()
+        return StateApplyResponse(
+            status="error", plan_id=plan.id,
+            lines_sent=push.get("lines_sent", 0),
+            output=push.get("output", ""),
+            message=push.get("error", "Apply failed"),
+        )
+
+
+@app.get("/api/state/{decl_id}/drift")
+def check_drift(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Compare what was last applied against the live device config.
+    Returns drifted=True if the device diverged from known state.
+    """
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+    if decl.status not in ("applied",):
+        return {"drifted": False, "reason": "Declaration has not been applied yet"}
+
+    dev   = decl.device
+    username, creds = _resolve_device_credentials(dev, db)
+    result = device_connector.pull_device_data(
+        host=dev.host, username=username, password=creds,
+        device_type=dev.device_type, port=dev.port, analysis_type="config_backup",
+        timeout=60,
+    )
+    if not result["success"]:
+        raise HTTPException(502, f"Could not reach device: {result['error']}")
+
+    live_lines = set(l.strip() for l in result["data"].splitlines() if l.strip())
+    applied_lines = [l for l in (decl.last_applied_config or "").splitlines() if l.strip()]
+    missing = [l for l in applied_lines if l.strip() not in live_lines]
+
+    drifted = len(missing) > 0
+    if drifted:
+        decl.status = "drifted"
+        db.commit()
+
+    return {
+        "drifted":      drifted,
+        "missing_lines": missing,
+        "reason":       f"{len(missing)} line(s) missing from device" if drifted else "In sync",
+    }
+
+
+@app.get("/api/state/{decl_id}/plans", response_model=List[StatePlanResponse])
+def list_state_plans(
+    decl_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    decl = db.query(StateDeclaration).filter(
+        StateDeclaration.id == decl_id,
+        StateDeclaration.user_id == current_user.id,
+    ).first()
+    if not decl:
+        raise HTTPException(404, "Declaration not found")
+    plans = (
+        db.query(StatePlan)
+        .filter(StatePlan.declaration_id == decl_id)
+        .order_by(StatePlan.created_at.desc())
+        .all()
+    )
+    return [StatePlanResponse.model_validate(p) for p in plans]
+
+
+@app.post("/api/state/import", response_model=StateImportResponse)
+def import_state_declarations(
+    body: StateImportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Bulk import/upsert state declarations from YAML (git pipeline entry point).
+    Matches by name — creates if new, updates variables if changed.
+    """
+    created = updated = 0
+    errors: list[str] = []
+
+    for item in body.declarations:
+        try:
+            tmpl = db.query(ServiceTemplate).filter(
+                ServiceTemplate.name == item.service_template,
+                ServiceTemplate.user_id == current_user.id,
+            ).first()
+            if not tmpl:
+                errors.append(f"{item.name}: template '{item.service_template}' not found")
+                continue
+
+            dev = db.query(Device).filter(
+                Device.name == item.device,
+                Device.user_id == current_user.id,
+            ).first()
+            if not dev:
+                errors.append(f"{item.name}: device '{item.device}' not found")
+                continue
+
+            existing = db.query(StateDeclaration).filter(
+                StateDeclaration.name == item.name,
+                StateDeclaration.user_id == current_user.id,
+            ).first()
+
+            if existing:
+                existing.variables = item.variables
+                existing.git_path  = item.git_path
+                existing.source    = "git"
+                if existing.status == "applied":
+                    existing.status = "pending"  # re-plan needed
+                updated += 1
+            else:
+                db.add(StateDeclaration(
+                    user_id             = current_user.id,
+                    name                = item.name,
+                    service_template_id = tmpl.id,
+                    device_id           = dev.id,
+                    variables           = item.variables,
+                    source              = "git",
+                    git_path            = item.git_path,
+                    status              = "pending",
+                ))
+                created += 1
+        except Exception as e:
+            errors.append(f"{item.name}: {e}")
+
+    db.commit()
+    return StateImportResponse(created=created, updated=updated, errors=errors)
+
+
+@app.get("/api/state/export")
+def export_state_declarations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export all declarations as a YAML-serializable structure for git storage."""
+    rows = db.query(StateDeclaration).filter(
+        StateDeclaration.user_id == current_user.id,
+    ).all()
+    declarations = []
+    for d in rows:
+        declarations.append({
+            "name":             d.name,
+            "service_template": d.template.name if d.template else "",
+            "device":           d.device.name   if d.device   else "",
+            "variables":        d.variables,
+            "git_path":         d.git_path,
+        })
+    return {"declarations": declarations}
 
 
 # ─────────────────────────────────────────────

@@ -1,0 +1,13 @@
+name: lan-to-wan
+service: FW Policy FortiGate
+device: fg1
+variables:
+  POLICY_NAME: LAN-to-WAN
+  SRC_INTF: port2
+  DST_INTF: port1
+  SRC_ADDR: all
+  DST_ADDR: all
+  SERVICE: HTTP HTTPS
+  ACTION: accept
+  NAT: enable
+  LOGTRAFFIC: all

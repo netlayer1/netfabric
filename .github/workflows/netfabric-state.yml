@@ -1,0 +1,133 @@
+name: NetFabric State — Plan & Apply
+
+on:
+  pull_request:
+    paths:
+      - 'network-state/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'network-state/**'
+
+env:
+  NETFABRIC_URL: ${{ secrets.NETFABRIC_URL }}       # e.g. http://your-server:8000
+  NETFABRIC_TOKEN: ${{ secrets.NETFABRIC_TOKEN }}   # JWT token from /api/auth/login
+
+jobs:
+  # ── On Pull Request: run Plan and post diff as PR comment ──────────────────
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import declarations
+        run: |
+          PAYLOAD=$(python3 -c "
+          import json, glob, yaml
+          decls = []
+          for f in glob.glob('network-state/**/*.yaml', recursive=True):
+              with open(f) as fh:
+                  d = yaml.safe_load(fh)
+                  d['git_path'] = f
+                  decls.append(d)
+          print(json.dumps({'declarations': decls}))
+          ")
+          curl -sf -X POST "$NETFABRIC_URL/api/state/import" \
+            -H "Authorization: Bearer $NETFABRIC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Run plan on all declarations and collect output
+        id: plan
+        run: |
+          # Get all declaration IDs
+          DECLS=$(curl -sf "$NETFABRIC_URL/api/state" \
+            -H "Authorization: Bearer $NETFABRIC_TOKEN")
+
+          PLAN_OUTPUT=""
+          IDS=$(echo "$DECLS" | python3 -c "import sys,json; [print(d['id'],d['name']) for d in json.load(sys.stdin)]")
+
+          while IFS=" " read -r id name; do
+            PLAN=$(curl -sf -X POST "$NETFABRIC_URL/api/state/$id/plan" \
+              -H "Authorization: Bearer $NETFABRIC_TOKEN")
+            SUMMARY=$(echo "$PLAN" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('summary',''))")
+            LINES=$(echo "$PLAN" | python3 -c "
+          import sys,json
+          p=json.load(sys.stdin)
+          for l in p.get('lines_to_add',[]): print(f'+ {l}')
+          for l in p.get('lines_existing',[]): print(f'  {l}')
+          ")
+            PLAN_OUTPUT="${PLAN_OUTPUT}\n### ${name}\n${SUMMARY}\n\`\`\`\n${LINES}\n\`\`\`\n"
+          done <<< "$IDS"
+
+          echo "PLAN_OUTPUT<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$PLAN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## NetFabric Plan\n\n${{ steps.plan.outputs.PLAN_OUTPUT }}`
+            })
+
+  # ── On merge to main: apply ────────────────────────────────────────────────
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import declarations
+        run: |
+          PAYLOAD=$(python3 -c "
+          import json, glob, yaml
+          decls = []
+          for f in glob.glob('network-state/**/*.yaml', recursive=True):
+              with open(f) as fh:
+                  d = yaml.safe_load(fh)
+                  d['git_path'] = f
+                  decls.append(d)
+          print(json.dumps({'declarations': decls}))
+          ")
+          curl -sf -X POST "$NETFABRIC_URL/api/state/import" \
+            -H "Authorization: Bearer $NETFABRIC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Plan and apply all declarations
+        run: |
+          DECLS=$(curl -sf "$NETFABRIC_URL/api/state" \
+            -H "Authorization: Bearer $NETFABRIC_TOKEN")
+
+          IDS=$(echo "$DECLS" | python3 -c "import sys,json; [print(d['id'],d['name']) for d in json.load(sys.stdin)]")
+          FAILED=0
+
+          while IFS=" " read -r id name; do
+            echo "── Planning: $name"
+            curl -sf -X POST "$NETFABRIC_URL/api/state/$id/plan" \
+              -H "Authorization: Bearer $NETFABRIC_TOKEN" | python3 -c "
+          import sys,json
+          p=json.load(sys.stdin)
+          print('  Summary:', p.get('summary',''))
+          "
+            echo "── Applying: $name"
+            RESULT=$(curl -sf -X POST "$NETFABRIC_URL/api/state/$id/apply" \
+              -H "Authorization: Bearer $NETFABRIC_TOKEN")
+            STATUS=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))")
+            MESSAGE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message',''))")
+            echo "  Status: $STATUS — $MESSAGE"
+            if [ "$STATUS" = "error" ]; then
+              FAILED=1
+            fi
+          done <<< "$IDS"
+
+          exit $FAILED

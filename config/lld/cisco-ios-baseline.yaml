@@ -1,0 +1,28 @@
+name: Cisco IOS Baseline
+description: Security and operational baseline checks for Cisco IOS devices
+
+checks:
+  - id: ntp-server
+    description: At least one NTP server must be configured
+    pattern: "ntp server"
+    severity: critical
+
+  - id: logging-enabled
+    description: Syslog logging must be enabled
+    pattern: "logging on"
+    severity: warning
+
+  - id: ssh-version-2
+    description: SSH version 2 must be enforced
+    pattern: "ip ssh version 2"
+    severity: critical
+
+  - id: exec-timeout
+    description: Console and VTY exec-timeout must be set
+    pattern: "exec-timeout"
+    severity: warning
+
+  - id: service-password-encryption
+    description: Password encryption service must be enabled
+    pattern: "service password-encryption"
+    severity: critical

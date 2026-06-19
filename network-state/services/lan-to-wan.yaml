@@ -1,0 +1,19 @@
+# network-state/services/lan-to-wan.yaml
+# NetFabric state declaration — managed by git
+# Changes here trigger the CI/CD pipeline:
+#   PR  → plan (shows what will change on devices)
+#   Merge → apply (pushes changes to devices)
+
+name: lan-to-wan-policy
+service_template: FW Policy FortiGate   # must match template name in NetFabric
+device: FG1                             # must match device name in NetFabric
+variables:
+  POLICY_NAME: LAN-to-WAN
+  SRC_INTF: port2
+  DST_INTF: port1
+  SRC_ADDR: all
+  DST_ADDR: all
+  SERVICE: HTTPS
+  ACTION: accept
+  NAT: enable
+  LOGTRAFFIC: all

@@ -1,0 +1,28 @@
+name: FortiGate Security Baseline
+description: Security compliance checks for FortiGate devices
+
+checks:
+  - id: ntp-sync
+    description: NTP synchronisation must be enabled
+    pattern: "set ntpsync enable"
+    severity: critical
+
+  - id: admin-timeout
+    description: Admin idle timeout must be configured
+    pattern: "set admintimeout"
+    severity: warning
+
+  - id: log-fortianalyzer
+    description: FortiAnalyzer logging must be enabled
+    pattern: "set status enable"
+    severity: warning
+
+  - id: password-policy
+    description: Password policy must be enabled
+    pattern: "set password-policy-status enable"
+    severity: critical
+
+  - id: ssh-enabled
+    description: SSH admin access must be enabled
+    pattern: "set admintimeout"
+    severity: info

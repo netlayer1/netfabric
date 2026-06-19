@@ -224,6 +224,55 @@ if not col_exists("service_templates", "ned_id"):
 else:
     print("✓ service_templates.ned_id already exists")
 
+# ── 14. state_declarations table ─────────────────────────────────────────────
+if not table_exists("state_declarations"):
+    execute("""
+        CREATE TABLE state_declarations (
+            id                  SERIAL PRIMARY KEY,
+            user_id             INTEGER NOT NULL REFERENCES users(id),
+            name                TEXT    NOT NULL,
+            service_template_id INTEGER NOT NULL REFERENCES service_templates(id),
+            device_id           INTEGER NOT NULL REFERENCES devices(id),
+            variables           JSONB   NOT NULL DEFAULT '{}',
+            source              TEXT    NOT NULL DEFAULT 'ui',
+            git_path            TEXT,
+            status              TEXT    NOT NULL DEFAULT 'pending',
+            last_applied_hash   TEXT,
+            last_applied_config TEXT,
+            last_plan_at        TIMESTAMP,
+            last_applied_at     TIMESTAMP,
+            created_at          TIMESTAMP DEFAULT NOW(),
+            updated_at          TIMESTAMP DEFAULT NOW()
+        )
+    """, "state_declarations table created")
+    execute("CREATE INDEX IF NOT EXISTS ix_state_decl_user_id   ON state_declarations(user_id)",   "Index on state_declarations.user_id")
+    execute("CREATE INDEX IF NOT EXISTS ix_state_decl_device_id ON state_declarations(device_id)", "Index on state_declarations.device_id")
+    execute("CREATE INDEX IF NOT EXISTS ix_state_decl_status    ON state_declarations(status)",    "Index on state_declarations.status")
+else:
+    print("✓ state_declarations table already exists")
+
+# ── 15. state_plans table ─────────────────────────────────────────────────────
+if not table_exists("state_plans"):
+    execute("""
+        CREATE TABLE state_plans (
+            id             SERIAL PRIMARY KEY,
+            declaration_id INTEGER NOT NULL REFERENCES state_declarations(id) ON DELETE CASCADE,
+            user_id        INTEGER NOT NULL REFERENCES users(id),
+            lines_to_add   JSONB   NOT NULL DEFAULT '[]',
+            lines_existing JSONB   NOT NULL DEFAULT '[]',
+            summary        TEXT    NOT NULL DEFAULT '',
+            status         TEXT    NOT NULL DEFAULT 'pending',
+            apply_output   TEXT,
+            transaction_id TEXT,
+            created_at     TIMESTAMP DEFAULT NOW(),
+            applied_at     TIMESTAMP
+        )
+    """, "state_plans table created")
+    execute("CREATE INDEX IF NOT EXISTS ix_state_plans_declaration_id ON state_plans(declaration_id)", "Index on state_plans.declaration_id")
+    execute("CREATE INDEX IF NOT EXISTS ix_state_plans_status         ON state_plans(status)",         "Index on state_plans.status")
+else:
+    print("✓ state_plans table already exists")
+
 commit()
 close()
 print("\nMigration complete.")

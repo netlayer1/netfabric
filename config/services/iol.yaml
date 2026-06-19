@@ -1,0 +1,7 @@
+name: iol
+ned_id: cisco-ios-cli-1.0
+description: ''
+variables: interface_name:Loopback105 ip_address:1.1.1.100 subnet_mask:255.255.255.255
+  description:Managed by NOC
+template: "interface {{ interface_name }}\n description {{ description }}\n ip address\
+  \ {{ ip_address }} {{ subnet_mask }}\n no shutdown"

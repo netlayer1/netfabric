@@ -696,10 +696,6 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span class="nav-label">Services</span>
         </div>
-        <div class="nav-item" data-page="logs" onclick="showPage('logs')">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          <span class="nav-label">Logs</span>
-        </div>
         <div class="nav-item" data-page="sync" onclick="showPage('sync')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span class="nav-label">Config Editor</span>
@@ -845,6 +841,73 @@
 
       <!-- CONFIG EDITOR -->
       <!-- ── Logs Page ─────────────────────────────────── -->
+      <!-- ── State (Network as Code) ─────────────────────────── -->
+      <div id="page-state" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2 style="margin-bottom:2px;">State</h2>
+            <div class="text-muted text-sm">Network as Code — desired state declarations</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost" onclick="loadState()">↺ Refresh</button>
+            <button class="btn btn-ghost" onclick="reloadConfigFiles(this)" title="Reload services, instances & LLD from config/ files">⟳ Reload Files</button>
+            <button class="btn btn-primary" onclick="openStateModal()">+ Declare</button>
+          </div>
+        </div>
+        <div class="page-content">
+          <div id="state-list"><div class="text-muted text-sm">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ── State Declaration Modal ──────────────────────────── -->
+      <div id="state-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeStateModal()">
+        <div class="modal" style="width:520px;">
+          <div class="modal-header">
+            <h3 id="state-modal-title">New Declaration</h3>
+            <button class="btn btn-ghost" onclick="closeStateModal()">✕</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label class="label">Name</label>
+              <input id="state-name" class="input" placeholder="e.g. lan-to-wan-policy">
+            </div>
+            <div style="display:flex;gap:10px;">
+              <div style="flex:1;">
+                <label class="label">Service Template</label>
+                <select id="state-template-id" class="input" onchange="loadStateVariableFields()"></select>
+              </div>
+              <div style="flex:1;">
+                <label class="label">Target Device</label>
+                <select id="state-device-id" class="input"></select>
+              </div>
+            </div>
+            <div id="state-variable-fields" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+              <button class="btn btn-ghost" onclick="closeStateModal()">Cancel</button>
+              <button class="btn btn-primary" onclick="saveStateDeclaration()">Save Declaration</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── State Plan Modal ─────────────────────────────────── -->
+      <div id="state-plan-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeStatePlanModal()">
+        <div class="modal" style="width:600px;">
+          <div class="modal-header">
+            <div>
+              <h3 id="state-plan-title">Plan</h3>
+              <div id="state-plan-summary" style="font-size:12px;color:var(--muted);margin-top:2px;"></div>
+            </div>
+            <button class="btn btn-ghost" onclick="closeStatePlanModal()">✕</button>
+          </div>
+          <pre id="state-plan-output" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;overflow:auto;max-height:52vh;font-size:11px;line-height:1.6;white-space:pre;"></pre>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+            <button class="btn btn-ghost" onclick="closeStatePlanModal()">Close</button>
+            <button id="state-apply-btn" class="btn btn-primary" onclick="applyStatePlan()">⚡ Apply</button>
+          </div>
+        </div>
+      </div>
+
       <div id="page-logs" class="hidden">
         <div class="page-header">
           <div>
@@ -2037,6 +2100,7 @@ function showPage(page) {
   if (page === 'devices')      loadDevices();
   if (page === 'device-groups') loadDeviceGroups();
   if (page === 'services')     loadServices();
+  if (page === 'state')        loadState();
   if (page === 'logs')         loadLogs();
   if (page === 'sync')         loadSync();
   if (page === 'fabric')       showFabricTab('subnets');
@@ -2448,6 +2512,238 @@ function toggleLogOutput(i) {
   const trigger = row.previousElementSibling;
   const arrow = trigger ? trigger.querySelector('td:last-child') : null;
   if (arrow) arrow.textContent = open ? '▶' : '▼';
+}
+
+// ════════════════════════════════════════════════
+// Network as Code — State
+// ════════════════════════════════════════════════
+
+let _stateDecls      = [];   // cached declarations
+let _statePlanDeclId = null; // which declaration the plan modal is for
+let _statePlanId     = null; // plan id returned from /plan
+
+const STATE_STATUS_BADGE = {
+  pending:  `<span style="color:var(--muted);font-weight:600;font-size:11px;">● PENDING</span>`,
+  applied:  `<span style="color:#22c55e;font-weight:600;font-size:11px;">✓ APPLIED</span>`,
+  drifted:  `<span style="color:#f59e0b;font-weight:600;font-size:11px;">⚠ DRIFTED</span>`,
+  error:    `<span style="color:var(--danger);font-weight:600;font-size:11px;">✗ ERROR</span>`,
+};
+
+async function reloadConfigFiles(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Reloading…';
+  try {
+    const r = await api('POST', '/api/reload');
+    const s = r.result;
+    toast(
+      `Reloaded — services: +${s.services.created} ~${s.services.updated} | ` +
+      `instances: +${s.instances.created} ~${s.instances.updated} | ` +
+      `lld: +${s.lld.created} ~${s.lld.updated}`,
+      'success'
+    );
+    loadState();
+  } catch(e) { toast(`Reload failed: ${e.message}`, 'error'); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
+async function loadState() {
+  const list = document.getElementById('state-list');
+  list.innerHTML = '<div class="text-muted text-sm">Loading…</div>';
+  try {
+    _stateDecls = await api('GET', '/api/state');
+    if (!_stateDecls.length) {
+      list.innerHTML = `<div class="card" style="padding:32px;text-align:center;color:var(--muted);">
+        No declarations yet — click <strong style="color:var(--text);">+ Declare</strong> to define desired state.
+      </div>`;
+      return;
+    }
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border);text-align:left;">
+            <th style="padding:6px 10px;font-weight:500;width:100px;">Status</th>
+            <th style="padding:6px 10px;font-weight:500;">Name</th>
+            <th style="padding:6px 10px;font-weight:500;">Template</th>
+            <th style="padding:6px 10px;font-weight:500;">Device</th>
+            <th style="padding:6px 10px;font-weight:500;">Source</th>
+            <th style="padding:6px 10px;font-weight:500;text-align:right;">Last Applied</th>
+            <th style="padding:6px 10px;font-weight:500;text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_stateDecls.map(d => {
+            const badge = STATE_STATUS_BADGE[d.status] || STATE_STATUS_BADGE.pending;
+            const ts    = d.last_applied_at ? new Date(d.last_applied_at).toLocaleString() : '—';
+            const src   = d.source === 'git'
+              ? `<span style="font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:3px;padding:1px 5px;">git</span>`
+              : `<span style="font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:1px 5px;">ui</span>`;
+            return `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 10px;">${badge}</td>
+                <td style="padding:8px 10px;font-weight:500;">${escHtml(d.name)}</td>
+                <td style="padding:8px 10px;color:var(--muted);">${escHtml(d.template_name||'')}</td>
+                <td style="padding:8px 10px;color:var(--muted);">${escHtml(d.device_name||'')}</td>
+                <td style="padding:8px 10px;">${src}</td>
+                <td style="padding:8px 10px;color:var(--muted);text-align:right;white-space:nowrap;">${ts}</td>
+                <td style="padding:8px 10px;text-align:right;white-space:nowrap;">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="runStatePlan(${d.id},'${escHtml(d.name)}')">Plan</button>
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:var(--accent);" onclick="checkStateDrift(${d.id})">Drift</button>
+                  <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:var(--danger);" onclick="deleteStateDecl(${d.id})">✕</button>
+                </td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    list.innerHTML = `<div class="text-muted text-sm">Failed: ${e.message}</div>`;
+  }
+}
+
+async function openStateModal() {
+  document.getElementById('state-name').value = '';
+  document.getElementById('state-variable-fields').innerHTML = '';
+  document.getElementById('state-modal').classList.remove('hidden');
+
+  // Fetch templates and devices fresh
+  let svcs = [], devs = [];
+  try { svcs = await api('GET', '/api/services'); } catch(e) {}
+  try { devs = await api('GET', '/api/devices');  } catch(e) {}
+
+  const tSel = document.getElementById('state-template-id');
+  tSel.innerHTML = svcs.length
+    ? svcs.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('')
+    : '<option disabled>No templates found</option>';
+
+  const dSel = document.getElementById('state-device-id');
+  dSel.innerHTML = devs.length
+    ? devs.map(d => `<option value="${d.id}">${escHtml(d.name)}</option>`).join('')
+    : '<option disabled>No devices found</option>';
+
+  // Cache for variable field loading
+  window._stateModalSvcs = svcs;
+  loadStateVariableFields();
+}
+
+function closeStateModal() {
+  document.getElementById('state-modal').classList.add('hidden');
+}
+
+function loadStateVariableFields() {
+  const tId = parseInt(document.getElementById('state-template-id').value);
+  const tmpl = (window._stateModalSvcs || []).find(s => s.id === tId);
+  const container = document.getElementById('state-variable-fields');
+  if (!tmpl || !tmpl.variables_schema) { container.innerHTML = ''; return; }
+  try {
+    const schema = jsyaml.load(tmpl.variables_schema) || {};
+    container.innerHTML = Object.entries(schema).map(([key, meta]) => {
+      const label = (meta && meta.label) ? meta.label : key;
+      const def   = (meta && meta.default !== undefined) ? meta.default : '';
+      return `<div>
+        <label class="label">${escHtml(label)}</label>
+        <input class="input state-var-field" data-key="${escHtml(key)}" value="${escHtml(String(def))}">
+      </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = `<div class="text-muted text-sm">Invalid schema: ${e.message}</div>`; }
+}
+
+async function saveStateDeclaration() {
+  const name       = document.getElementById('state-name').value.trim();
+  const templateId = parseInt(document.getElementById('state-template-id').value);
+  const deviceId   = parseInt(document.getElementById('state-device-id').value);
+  if (!name) { toast('Name required', 'error'); return; }
+
+  const variables = {};
+  document.querySelectorAll('.state-var-field').forEach(el => {
+    variables[el.dataset.key] = el.value;
+  });
+
+  try {
+    await api('POST', '/api/state', { name, service_template_id: templateId, device_id: deviceId, variables });
+    toast('Declaration saved', 'success');
+    closeStateModal();
+    loadState();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteStateDecl(id) {
+  if (!confirm('Delete this declaration?')) return;
+  try {
+    await api('DELETE', `/api/state/${id}`);
+    toast('Deleted', 'success');
+    loadState();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function runStatePlan(declId, name) {
+  _statePlanDeclId = declId;
+  const modal  = document.getElementById('state-plan-modal');
+  const output = document.getElementById('state-plan-output');
+  const summary = document.getElementById('state-plan-summary');
+  document.getElementById('state-plan-title').textContent = `Plan — ${name}`;
+  summary.textContent = 'Computing plan…';
+  output.textContent  = 'Connecting to device…';
+  document.getElementById('state-apply-btn').disabled = true;
+  modal.classList.remove('hidden');
+
+  try {
+    const plan = await api('POST', `/api/state/${declId}/plan`);
+    _statePlanId = plan.id;
+    summary.textContent = plan.summary;
+
+    const lines = [
+      ...plan.lines_to_add.map(l => `+ ${l}`),
+      ...plan.lines_existing.map(l => `  ${l}`),
+    ];
+    output.innerHTML = lines.map(l => {
+      const color = l.startsWith('+') ? '#22c55e' : 'var(--muted)';
+      return `<span style="color:${color};">${escHtml(l)}</span>`;
+    }).join('\n');
+
+    document.getElementById('state-apply-btn').disabled = plan.lines_to_add.length === 0;
+  } catch(e) {
+    output.textContent = `Error: ${e.message}`;
+    summary.textContent = 'Plan failed';
+  }
+}
+
+function closeStatePlanModal() {
+  document.getElementById('state-plan-modal').classList.add('hidden');
+  _statePlanDeclId = null;
+  _statePlanId     = null;
+}
+
+async function applyStatePlan() {
+  if (!_statePlanDeclId) return;
+  const btn = document.getElementById('state-apply-btn');
+  const output = document.getElementById('state-plan-output');
+  btn.disabled = true;
+  btn.textContent = 'Applying…';
+
+  try {
+    const result = await api('POST', `/api/state/${_statePlanDeclId}/apply`);
+    const color  = result.status === 'applied' ? '#22c55e' : result.status === 'no-change' ? 'var(--muted)' : 'var(--danger)';
+    output.innerHTML += `\n\n<span style="color:${color};font-weight:600;">${escHtml(result.message)}</span>`;
+    if (result.output) output.innerHTML += `\n${escHtml(result.output)}`;
+    toast(result.message, result.status === 'error' ? 'error' : 'success');
+    loadState();
+  } catch(e) {
+    toast(`Apply failed: ${e.message}`, 'error');
+  }
+  btn.textContent = '⚡ Apply';
+  btn.disabled = false;
+}
+
+async function checkStateDrift(declId) {
+  try {
+    toast('Checking drift…', 'info');
+    const result = await api('GET', `/api/state/${declId}/drift`);
+    if (result.drifted) {
+      toast(`⚠ Drift detected: ${result.reason}`, 'error');
+    } else {
+      toast(`✓ In sync — ${result.reason}`, 'success');
+    }
+    loadState();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
 }
 
 // Services
@@ -3000,6 +3296,16 @@ async function deployService() {
     return;
   } catch(e) { showToast(e.message || 'Deploy failed', 'error'); }
   finally { btn.disabled = false; btn.textContent = '▶ Deploy to Device'; }
+}
+
+async function exportServiceToFile(id, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Exporting…';
+  try {
+    const r = await api('POST', `/api/services/${id}/export-to-file`);
+    toast(`Saved to ${r.file} — run git add & commit to version control`, 'success');
+  } catch(e) { toast(`Export failed: ${e.message}`, 'error'); }
+  btn.disabled = false; btn.textContent = orig;
 }
 
 async function deleteSvcTemplate(id) {
