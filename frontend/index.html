@@ -1220,6 +1220,7 @@
       <h3 id="config-modal-title">Running Config</h3>
       <div class="flex gap-2">
         <button id="config-btn-copy"  class="btn btn-ghost"    style="font-size:12px;" onclick="copyConfigModal()">Copy</button>
+        <button id="config-btn-live-status" class="btn btn-ghost" style="font-size:12px;" onclick="openLiveStatusFromConfig()">⚡ Live Status</button>
         <button id="config-btn-edit"  class="btn btn-ghost"    style="font-size:12px;" onclick="startEditConfig()">✏ Edit</button>
         <button id="config-btn-apply" class="btn btn-primary hidden" style="font-size:12px;" onclick="applyConfig()">▶ Apply to Device</button>
         <button id="config-btn-cancel" class="btn btn-ghost hidden"  style="font-size:12px;" onclick="cancelEditConfig()">Cancel</button>
@@ -3024,7 +3025,7 @@ function renderSyncRow(d, lastSync, lockStatus, lastTxnSync) {
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
             onclick="doShowConfig(${d.id})">View / Edit Config</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
-            onclick="openLiveStatus(${d.id},'${escHtml(d.name)}',${JSON.stringify(d.ned_id||d.device_type)})">Live Status</button>
+            onclick="openLiveStatus(${d.id},'${escHtml(d.name)}','${escHtml(d.ned_id||d.device_type||'')}')">Live Status</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;"
             onclick="openTxnHistory(${d.id},'${escHtml(d.name)}')">History</button>
         </div>
@@ -4293,6 +4294,13 @@ function renderNedDiff(diff) {
 // Live Status (operational data)
 // ════════════════════════════════════════════════
 let _liveStatusDeviceId = null;
+
+function openLiveStatusFromConfig() {
+  if (!_configModalDeviceId) return;
+  const d = (devices || []).find(x => x.id === _configModalDeviceId);
+  if (!d) return;
+  openLiveStatus(d.id, d.name, d.ned_id || d.device_type);
+}
 
 async function openLiveStatus(deviceId, deviceName, nedId) {
   _liveStatusDeviceId = deviceId;

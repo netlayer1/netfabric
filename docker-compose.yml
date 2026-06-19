@@ -29,6 +29,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+      - ./frontend:/app/frontend
     depends_on:
       db:
         condition: service_healthy
