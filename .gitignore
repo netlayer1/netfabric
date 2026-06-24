@@ -35,3 +35,7 @@ data/logs/
 .vscode/
 .idea/
 *.swp
+
+# License files — never commit, distribute to clients separately
+license.json
+license_*.json
