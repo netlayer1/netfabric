@@ -59,6 +59,8 @@ import json
 import yaml
 from jinja2 import Environment, StrictUndefined, UndefinedError, TemplateSyntaxError
 
+from backend.license_guard import enforce_node_limit, get_license_info, LicenseError
+
 from backend.models import (
     User, Device, AnalysisResult, ConfigSnapshot, SyncHistory,
     DeviceGroup, DeviceLock, Authgroup,
@@ -148,6 +150,19 @@ if os.path.exists("frontend"):
 @app.get("/health")
 def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+
+# License
+# ─────────────────────────────────────────────
+
+@app.get("/api/license")
+def license_info(current_user: User = Depends(get_current_user)):
+    """Return the active license tier and node cap (no secret data exposed)."""
+    try:
+        info = get_license_info()
+    except LicenseError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
+    return info
 
 
 @app.post("/api/reload")
@@ -414,6 +429,13 @@ def add_device(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # ── License: enforce per-user device cap ──────────────────────────────────
+    current_count = db.query(Device).filter(Device.user_id == current_user.id).count()
+    try:
+        enforce_node_limit(current_count)
+    except LicenseError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
+
     # Auto-resolve ned_id from device_type if not explicitly provided
     ned_id = payload.ned_id or ned_id_from_netmiko_type(payload.device_type)
 
