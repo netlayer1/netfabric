@@ -87,7 +87,7 @@ def main() -> None:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    out_path = Path(args.out) if args.out else Path(f"license_{args.customer_id}.json")
+    out_path = Path(args.out) if args.out else Path.home() / "Desktop" / f"license_{args.customer_id}.json"
     out_path.write_text(json.dumps(license_data, indent=2))
 
     max_nodes = TIERS[args.tier]
@@ -99,7 +99,7 @@ def main() -> None:
     print(f"  issued_at   : {license_data['issued_at']}")
     print()
     print("Send the license file to the customer.")
-    print("They mount it at /app/license/license.json in their Docker setup.")
+    print("Send them the file — they upload it via Settings → License in the web UI.")
 
 
 if __name__ == "__main__":
