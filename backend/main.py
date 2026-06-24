@@ -555,6 +555,21 @@ def delete_device(
     db: Session = Depends(get_db),
 ):
     device = _get_owned_device(device_id, current_user.id, db)
+
+    # Block deletion if active services are deployed on this device
+    service_count = db.query(ServiceInstance).filter(ServiceInstance.device_id == device_id).count()
+    state_count = db.query(StateDeclaration).filter(StateDeclaration.device_id == device_id).count()
+    if service_count or state_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete device '{device.name}': "
+                f"{service_count} service instance(s) and {state_count} state declaration(s) are still deployed on it. "
+                f"Delete those first, then retry."
+            ),
+        )
+
+    # Safe to delete — cascade handles the rest at DB level
     db.delete(device)
     db.commit()
 

@@ -107,7 +107,7 @@ class ConfigSnapshot(Base):
     __tablename__ = "config_snapshots"
 
     id          = Column(Integer, primary_key=True, index=True)
-    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    device_id   = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     config      = Column(Text, nullable=False)
     fetched_at  = Column(DateTime, default=datetime.utcnow)
 
@@ -118,7 +118,7 @@ class SyncHistory(Base):
     __tablename__ = "sync_history"
 
     id             = Column(Integer, primary_key=True, index=True)
-    device_id      = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    device_id      = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     action         = Column(String, nullable=False)
     status         = Column(String, nullable=False)
     detail         = Column(Text, default="")
@@ -136,7 +136,7 @@ class DeviceLock(Base):
     __tablename__ = "device_locks"
 
     id             = Column(Integer, primary_key=True, index=True)
-    device_id      = Column(Integer, ForeignKey("devices.id"), unique=True, nullable=False)
+    device_id      = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), unique=True, nullable=False)
     user_id        = Column(Integer, ForeignKey("users.id"), nullable=False)
     transaction_id = Column(String, nullable=False, default=lambda: str(uuid.uuid4()))
     locked_at      = Column(DateTime, default=datetime.utcnow)
@@ -151,7 +151,7 @@ class AnalysisResult(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    device_id = Column(Integer, ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
     analysis_type = Column(String, nullable=False)
     prompt = Column(Text, nullable=False)
     result = Column(Text, nullable=False)
@@ -385,7 +385,7 @@ class ServiceInstance(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     template_id  = Column(Integer, ForeignKey("service_templates.id"), nullable=False)
-    device_id    = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    device_id    = Column(Integer, ForeignKey("devices.id", ondelete="RESTRICT"), nullable=True)
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
     # JSON-encoded dict of variable values used at deploy time
     variable_values = Column(Text, nullable=False, default="{}")
@@ -490,7 +490,7 @@ class StateDeclaration(Base):
     user_id             = Column(Integer, ForeignKey("users.id"), nullable=False)
     name                = Column(String, nullable=False)          # human label, e.g. "lan-to-wan-policy"
     service_template_id = Column(Integer, ForeignKey("service_templates.id"), nullable=False)
-    device_id           = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    device_id           = Column(Integer, ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False)
     # Desired variable values (JSON) — the intent
     variables           = Column(JSON, nullable=False, default=dict)
     # Source: 'ui' (created via UI) or 'git' (imported from YAML)

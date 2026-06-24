@@ -71,7 +71,7 @@ class LLDCheckHistory(Base):
     id          = Column(Integer, primary_key=True, index=True)
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
     template_id = Column(Integer, ForeignKey("lld_templates.id"), nullable=False)
-    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    device_id   = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     passed      = Column(Integer, nullable=False)   # count
     failed      = Column(Integer, nullable=False)   # count
     total       = Column(Integer, nullable=False)   # count

@@ -119,7 +119,7 @@ class IPAddress(Base):
     # available | in-use | reserved | dhcp
     status      = Column(String, default="available")
     hostname    = Column(String, default="")
-    device_id   = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    device_id   = Column(Integer, ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
     description = Column(String, default="")
     last_seen   = Column(DateTime, nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
