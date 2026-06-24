@@ -22,10 +22,31 @@ import os
 # Change this before distributing. Keep it out of version control.
 _SECRET_KEY = b"nf-license-secret-change-before-release"
 
-# ── License file path — override with NETFABRIC_LICENSE env var ───────────────
+# ── License file path — stored in the persistent data volume ─────────────────
+# Override with NETFABRIC_LICENSE env var if needed.
 _LICENSE_PATH = os.environ.get(
-    "NETFABRIC_LICENSE", "/app/license/license.json"
+    "NETFABRIC_LICENSE", "/app/data/license.json"
 )
+
+
+def save_license(raw: dict) -> None:
+    """
+    Validate and persist a license dict to the data volume.
+    Raises LicenseError if the signature is invalid.
+    """
+    import json as _json
+    # Write to a temp copy of data dict (without signature) to verify
+    check = dict(raw)
+    provided_sig = check.pop("signature", None)
+    if not provided_sig:
+        raise LicenseError("License has no signature field.")
+    body = _json.dumps(check, sort_keys=True).encode()
+    expected = hmac.new(_SECRET_KEY, body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(provided_sig, expected):
+        raise LicenseError("License signature invalid — file may be tampered with.")
+    os.makedirs(os.path.dirname(_LICENSE_PATH), exist_ok=True)
+    with open(_LICENSE_PATH, "w") as fh:
+        _json.dump(raw, fh, indent=2)
 
 _VALID_TIERS = {"1": 1, "10": 10, "100": 100, "1000": 1000, "unlimited": -1}
 

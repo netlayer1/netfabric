@@ -43,7 +43,7 @@ load_dotenv()
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -59,7 +59,7 @@ import json
 import yaml
 from jinja2 import Environment, StrictUndefined, UndefinedError, TemplateSyntaxError
 
-from backend.license_guard import enforce_node_limit, get_license_info, LicenseError
+from backend.license_guard import enforce_node_limit, get_license_info, save_license, LicenseError
 
 from backend.models import (
     User, Device, AnalysisResult, ConfigSnapshot, SyncHistory,
@@ -163,6 +163,23 @@ def license_info(current_user: User = Depends(get_current_user)):
     except LicenseError as exc:
         raise HTTPException(status_code=402, detail=str(exc))
     return info
+
+
+@app.post("/api/license/upload", status_code=200)
+async def upload_license(
+    file: UploadFile,
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a license.json file via the web UI."""
+    content = await file.read()
+    try:
+        data = json.loads(content)
+        save_license(data)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid license file: {exc}")
+    except LicenseError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
+    return {"detail": "License activated.", "tier": data.get("tier"), "max_nodes": data.get("max_nodes")}
 
 
 @app.post("/api/reload")
