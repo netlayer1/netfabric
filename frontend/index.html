@@ -666,6 +666,35 @@
     </div>
   </div>
 
+
+  <!-- License warning banner (hidden by default) -->
+  <div id="license-banner" class="hidden" style="background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.3);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#fca5a5;">
+    <span id="license-banner-msg">⚠ No valid license found. Device management is disabled.</span>
+    <button class="btn" style="background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);color:#fca5a5;font-size:12px;padding:4px 12px;" onclick="openLicenseModal()">Upload License</button>
+  </div>
+
+  <!-- License upload modal -->
+  <div id="license-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:420px;max-width:90vw;">
+      <h3 style="margin:0 0 6px;font-size:16px;">Activate License</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 20px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
+      <div id="license-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;font-size:13px;color:var(--muted);"
+           onclick="document.getElementById('license-file-input').click()"
+           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+           ondragleave="this.style.borderColor='var(--border)'"
+           ondrop="handleLicenseDrop(event)">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:8px;opacity:.5;display:block;margin-left:auto;margin-right:auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div id="license-file-name">Click or drag license.json here</div>
+      </div>
+      <input type="file" id="license-file-input" accept=".json" style="display:none" onchange="handleLicenseFileSelect(this)">
+      <div id="license-upload-error" class="hidden" style="color:var(--danger);font-size:12px;margin-bottom:12px;padding:8px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="closeLicenseModal()">Cancel</button>
+        <button class="btn btn-primary" id="license-upload-btn" onclick="uploadLicense()" disabled>Activate</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app-body">
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
@@ -2067,8 +2096,81 @@ async function initApp() {
     // Pre-load authgroups so device modal dropdown is ready immediately
     api('GET', '/api/authgroups').then(gs => { window._authgroupsCache = gs; }).catch(() => {});
     showPage('dashboard');
+    // Check license status — show banner if missing/invalid
+    checkLicenseStatus();
   } catch(e) {
     token = ''; localStorage.removeItem('netfabric_token');
+  }
+}
+
+// ════════════════════════════════════════════════
+// License
+// ════════════════════════════════════════════════
+let _licenseFile = null;
+
+async function checkLicenseStatus() {
+  try {
+    const info = await api('GET', '/api/license');
+    // License valid — hide banner, update dashboard if present
+    document.getElementById('license-banner').classList.add('hidden');
+    const el = document.getElementById('dash-license-tier');
+    if (el) el.textContent = info.tier === 'unlimited' ? 'Unlimited' : `${info.max_nodes} node${info.max_nodes !== 1 ? 's' : ''}`;
+  } catch(e) {
+    // 402 = no license; show banner
+    const banner = document.getElementById('license-banner');
+    banner.classList.remove('hidden');
+    document.getElementById('license-banner-msg').textContent =
+      '⚠ ' + (e.message || 'No valid license found. Device management is disabled.');
+  }
+}
+
+function openLicenseModal() {
+  _licenseFile = null;
+  document.getElementById('license-file-name').textContent = 'Click or drag license.json here';
+  document.getElementById('license-upload-btn').disabled = true;
+  document.getElementById('license-upload-error').classList.add('hidden');
+  document.getElementById('license-modal').classList.remove('hidden');
+}
+
+function closeLicenseModal() {
+  document.getElementById('license-modal').classList.add('hidden');
+}
+
+function handleLicenseFileSelect(input) {
+  if (input.files[0]) { _licenseFile = input.files[0]; document.getElementById('license-file-name').textContent = _licenseFile.name; document.getElementById('license-upload-btn').disabled = false; }
+}
+
+function handleLicenseDrop(e) {
+  e.preventDefault();
+  document.getElementById('license-drop-zone').style.borderColor = 'var(--border)';
+  const f = e.dataTransfer.files[0];
+  if (f) { _licenseFile = f; document.getElementById('license-file-name').textContent = f.name; document.getElementById('license-upload-btn').disabled = false; }
+}
+
+async function uploadLicense() {
+  if (!_licenseFile) return;
+  const errEl = document.getElementById('license-upload-error');
+  errEl.classList.add('hidden');
+  const btn = document.getElementById('license-upload-btn');
+  btn.disabled = true; btn.textContent = 'Activating…';
+  try {
+    const form = new FormData();
+    form.append('file', _licenseFile);
+    const res = await fetch(`${API}/api/license/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    closeLicenseModal();
+    showToast(`License activated — ${data.tier} tier (${data.max_nodes === -1 ? 'unlimited' : data.max_nodes + ' nodes'})`, 'success');
+    checkLicenseStatus();
+  } catch(e) {
+    errEl.textContent = e.message || 'Upload failed';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Activate';
   }
 }
 
