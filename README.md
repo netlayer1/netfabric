@@ -27,9 +27,17 @@ Network management and automation platform for MSPs and network engineers. Conne
 
 ### Run (development)
 
+Generate the required keys:
+
 ```bash
-cp .env.example .env
-# Fill in SECRET_KEY, FERNET_KEY, POSTGRES_PASSWORD, ANTHROPIC_API_KEY
+openssl rand -hex 32                                              # SECRET_KEY
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # FERNET_KEY
+openssl rand -hex 16                                              # POSTGRES_PASSWORD
+```
+
+Create `.env` with the generated values, then:
+
+```bash
 docker compose up --build
 ```
 
