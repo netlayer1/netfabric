@@ -849,6 +849,16 @@
             <button class="btn btn-primary" onclick="openAddDeviceModal()">+ Add Device</button>
           </div>
         </div>
+        <!-- Bulk action toolbar (shown when devices are selected) -->
+        <div id="bulk-toolbar" class="hidden" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(59,130,246,.08);border-bottom:1px solid rgba(59,130,246,.2);font-size:13px;">
+          <span id="bulk-count" style="color:var(--accent);font-weight:600;">0 selected</span>
+          <span style="color:var(--border);">|</span>
+          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('test')">⚡ Test</button>
+          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('check-sync')">🔍 Check-Sync</button>
+          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('sync-from')">⬇ Sync-From</button>
+          <button class="btn" style="font-size:12px;padding:4px 10px;color:#fca5a5;border-color:rgba(239,68,68,.3);" onclick="bulkAction('delete')">🗑 Delete</button>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;margin-left:auto;" onclick="clearSelection()">✕ Clear</button>
+        </div>
         <div class="page-content" style="padding:0;overflow-x:auto;">
           <div id="devices-grid">
             <div class="text-muted text-sm" style="padding:20px;">Loading...</div>
@@ -2301,6 +2311,7 @@ function filterDeviceTable(q) {
 
 const _THEAD = `<thead>
   <tr style="background:var(--surface);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:1;">
+    <th style="padding:10px 10px;width:32px;"><input type="checkbox" id="chk-all" onchange="toggleAllDevices(this.checked)" title="Select all"></th>
     <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;white-space:nowrap;">Name</th>
     <th style="padding:10px 14px;text-align:left;color:var(--muted);font-weight:600;">Address</th>
     <th style="padding:10px 6px;text-align:center;color:var(--muted);font-weight:600;">Port</th>
@@ -2366,6 +2377,7 @@ function _actionBtn(label, onclick, style='') {
 function renderDeviceRow(d) {
   return `
     <tr id="device-row-${d.id}" style="border-bottom:1px solid var(--border);" class="device-table-row">
+      <td style="padding:10px 10px;"><input type="checkbox" class="device-cb" data-id="${d.id}" data-name="${escHtml(d.name)}" onchange="onDeviceSelect()"></td>
       <td style="padding:10px 14px;font-weight:600;color:var(--text);white-space:nowrap;">${escHtml(d.name)}</td>
       <td style="padding:10px 14px;color:var(--muted);font-family:monospace;">${escHtml(d.host)}</td>
       <td style="padding:10px 6px;text-align:center;color:var(--muted);">${d.port}</td>
@@ -2396,10 +2408,74 @@ function renderDeviceRow(d) {
     </tr>`;
 }
 
-// ── Selection & Bulk Backup ──────────────────────────────────────
+// ── Selection & Bulk Actions ─────────────────────────────────────
 
-function getSelectedIds() {
-  return [...document.querySelectorAll('.device-cb:checked')].map(cb => parseInt(cb.dataset.id));
+function getSelectedIds()    { return [...document.querySelectorAll('.device-cb:checked')].map(cb => parseInt(cb.dataset.id)); }
+function getSelectedNames()  { return [...document.querySelectorAll('.device-cb:checked')].map(cb => cb.dataset.name); }
+
+function onDeviceSelect() {
+  const selected = document.querySelectorAll('.device-cb:checked').length;
+  const toolbar  = document.getElementById('bulk-toolbar');
+  const countEl  = document.getElementById('bulk-count');
+  if (selected > 0) {
+    toolbar.classList.remove('hidden');
+    toolbar.style.display = 'flex';
+    countEl.textContent = `${selected} selected`;
+  } else {
+    toolbar.classList.add('hidden');
+  }
+}
+
+function toggleAllDevices(checked) {
+  document.querySelectorAll('.device-cb').forEach(cb => { cb.checked = checked; });
+  onDeviceSelect();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.device-cb').forEach(cb => cb.checked = false);
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = false;
+  onDeviceSelect();
+}
+
+async function bulkAction(action) {
+  const names = getSelectedNames();
+  if (!names.length) return;
+
+  if (action === 'delete') {
+    if (!confirm(`Delete ${names.length} device(s)?
+${names.join(', ')}`)) return;
+  }
+
+  const endpointMap = {
+    'delete':     '/api/devices/bulk/delete',
+    'test':       '/api/devices/bulk/test',
+    'sync-from':  '/api/devices/bulk/sync-from',
+    'check-sync': '/api/devices/bulk/check-sync',
+  };
+
+  try {
+    const res = await api('POST', endpointMap[action], { names });
+    const results = res.results || [];
+    const deleted  = res.deleted  || [];
+    const skipped  = res.skipped  || [];
+
+    if (action === 'delete') {
+      const msg = deleted.length ? `Deleted: ${deleted.join(', ')}` : 'Nothing deleted';
+      const skip = skipped.length ? ` | Skipped: ${skipped.map(s=>s.name).join(', ')}` : '';
+      showToast(msg + skip, deleted.length ? 'success' : 'warning');
+    } else {
+      const ok  = results.filter(r => r.status === 'ok' || r.status === 'in-sync').map(r => r.name);
+      const err = results.filter(r => r.status === 'error').map(r => `${r.name}: ${r.detail}`);
+      if (ok.length)  showToast(`✓ ${ok.join(', ')}`, 'success');
+      if (err.length) showToast(`✗ ${err.join(' | ')}`, 'error');
+    }
+
+    clearSelection();
+    loadDevices();
+  } catch(e) {
+    showToast(e.message || 'Bulk action failed', 'error');
+  }
 }
 
 // Keep renderDeviceCard for dashboard (mini cards, no actions)
