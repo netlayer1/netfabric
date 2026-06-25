@@ -50,11 +50,13 @@ def generate_license(customer_id: str, tier: str) -> dict:
             f"Unknown tier '{tier}'. Valid tiers: {', '.join(TIERS)}"
         )
 
+    now = datetime.now(timezone.utc)
     payload = {
         "customer_id": customer_id,
         "tier": tier,
         "max_nodes": TIERS[tier],
-        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "issued_at": now.isoformat(),
+        "expires_at": now.replace(year=now.year + 1).isoformat(),
     }
 
     # Sign the canonical JSON (sort_keys so order never matters)
@@ -97,9 +99,10 @@ def main() -> None:
     print(f"  tier        : {args.tier}")
     print(f"  max_nodes   : {cap_str}")
     print(f"  issued_at   : {license_data['issued_at']}")
+    print(f"  expires_at  : {license_data['expires_at']}")
     print()
     print("Send the license file to the customer.")
-    print("Send them the file — they upload it via Settings → License in the web UI.")
+    print("They upload it via the web UI on first login.")
 
 
 if __name__ == "__main__":

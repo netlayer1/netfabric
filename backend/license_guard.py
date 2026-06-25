@@ -86,6 +86,17 @@ def _load_and_verify() -> dict:
             "License signature mismatch — the file may have been tampered with."
         )
 
+    # Check expiry
+    expires_at = data.get("expires_at")
+    if expires_at:
+        from datetime import datetime, timezone
+        expiry = datetime.fromisoformat(expires_at)
+        if datetime.now(timezone.utc) > expiry:
+            raise LicenseError(
+                f"License expired on {expiry.strftime('%Y-%m-%d')}. "
+                "Contact support to renew."
+            )
+
     # Restore signature so callers can inspect if needed
     data["signature"] = provided_sig
     return data
@@ -109,6 +120,7 @@ def get_license_info() -> dict:
         "tier": lic.get("tier", "unknown"),
         "max_nodes": lic.get("max_nodes", 0),
         "issued_at": lic.get("issued_at", "unknown"),
+        "expires_at": lic.get("expires_at", None),
     }
 
 
