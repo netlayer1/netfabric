@@ -44,6 +44,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -146,6 +147,12 @@ if os.path.exists("frontend"):
 # ─────────────────────────────────────────────
 # Health
 # ─────────────────────────────────────────────
+
+# ── Bulk device request model ─────────────────────────────────────────────────
+class BulkDeviceRequest(BaseModel):
+    names: List[str] = []   # device names
+    ids: List[int] = []     # device IDs (union with names)
+
 
 @app.get("/health")
 def health():
@@ -613,12 +620,6 @@ def delete_device(
     db.delete(device)
     db.commit()
 
-
-# ── Bulk operations (accept list of names or IDs) ────────────────────────────
-
-class BulkDeviceRequest(BaseModel):
-    names: List[str] = []   # device names
-    ids: List[int] = []     # device IDs (union with names)
 
 @app.post("/api/devices/bulk/delete", status_code=200)
 def bulk_delete_devices(
