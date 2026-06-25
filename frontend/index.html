@@ -117,6 +117,8 @@
     .nso-btn:hover   { background: rgba(34,197,94,.18); border-color: rgba(34,197,94,.4); }
     .nso-btn:disabled { opacity: .4; cursor: wait; }
     .device-table-row { transition: background .1s; }
+    .bulk-menu-item { padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text); }
+    .bulk-menu-item:hover { background:var(--surface-2); }
     .device-table-row:hover td { background: rgba(59,130,246,.04) !important; }
 
     /* ── Spinner ─────────────────────────────── */
@@ -849,15 +851,23 @@
             <button class="btn btn-primary" onclick="openAddDeviceModal()">+ Add Device</button>
           </div>
         </div>
-        <!-- Bulk action toolbar (shown when devices are selected) -->
-        <div id="bulk-toolbar" class="hidden" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(59,130,246,.08);border-bottom:1px solid rgba(59,130,246,.2);font-size:13px;">
-          <span id="bulk-count" style="color:var(--accent);font-weight:600;">0 selected</span>
-          <span style="color:var(--border);">|</span>
-          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('test')">⚡ Test</button>
-          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('check-sync')">🔍 Check-Sync</button>
-          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="bulkAction('sync-from')">⬇ Sync-From</button>
-          <button class="btn" style="font-size:12px;padding:4px 10px;color:#fca5a5;border-color:rgba(239,68,68,.3);" onclick="bulkAction('delete')">🗑 Delete</button>
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;margin-left:auto;" onclick="clearSelection()">✕ Clear</button>
+        <!-- Bulk action bar (shown when devices are selected) -->
+        <div id="bulk-toolbar" class="hidden" style="display:flex;align-items:center;gap:10px;padding:7px 16px;background:var(--surface);border-bottom:1px solid var(--border);font-size:13px;">
+          <span id="bulk-count" style="color:var(--accent);font-weight:600;min-width:80px;">0 selected</span>
+          <div style="position:relative;">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;display:flex;align-items:center;gap:6px;" onclick="toggleBulkMenu(event)">
+              Actions
+              <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="bulk-menu" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);min-width:160px;z-index:100;box-shadow:var(--shadow-md);overflow:hidden;">
+              <div class="bulk-menu-item" onclick="bulkAction('test')">Test connectivity</div>
+              <div class="bulk-menu-item" onclick="bulkAction('check-sync')">Check-sync</div>
+              <div class="bulk-menu-item" onclick="bulkAction('sync-from')">Sync-from</div>
+              <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
+              <div class="bulk-menu-item" style="color:var(--danger);" onclick="bulkAction('delete')">Delete</div>
+            </div>
+          </div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="clearSelection()">✕ Clear</button>
         </div>
         <div class="page-content" style="padding:0;overflow-x:auto;">
           <div id="devices-grid">
@@ -2438,6 +2448,15 @@ function clearSelection() {
   onDeviceSelect();
 }
 
+function toggleBulkMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('bulk-menu');
+  menu.classList.toggle('hidden');
+  // Close on outside click
+  const close = () => { menu.classList.add('hidden'); document.removeEventListener('click', close); };
+  if (!menu.classList.contains('hidden')) setTimeout(() => document.addEventListener('click', close), 0);
+}
+
 async function bulkAction(action) {
   const names = getSelectedNames();
   if (!names.length) return;
@@ -2454,6 +2473,7 @@ ${names.join(', ')}`)) return;
     'check-sync': '/api/devices/bulk/check-sync',
   };
 
+  document.getElementById('bulk-menu').classList.add('hidden');
   try {
     const res = await api('POST', endpointMap[action], { names });
     const results = res.results || [];
