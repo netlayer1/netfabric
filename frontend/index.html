@@ -740,6 +740,10 @@
       </nav>
 
       <div class="sidebar-footer">
+        <div id="sidebar-license-info" style="font-size:10px;color:var(--muted);padding:0 4px 8px;line-height:1.6;display:none;">
+          <div>License: <span id="sidebar-license-tier" style="color:var(--text);"></span></div>
+          <div>Expires: <span id="sidebar-license-expiry" style="color:var(--text);"></span></div>
+        </div>
         <button class="btn btn-ghost" style="width:100%;font-size:11px;" onclick="logout()">Sign Out</button>
       </div>
     </div>
@@ -2111,10 +2115,21 @@ let _licenseFile = null;
 async function checkLicenseStatus() {
   try {
     const info = await api('GET', '/api/license');
-    // License valid — hide banner, update dashboard if present
+    // License valid — hide banner, show info in sidebar
     document.getElementById('license-banner').classList.add('hidden');
-    const el = document.getElementById('dash-license-tier');
-    if (el) el.textContent = info.tier === 'unlimited' ? 'Unlimited' : `${info.max_nodes} node${info.max_nodes !== 1 ? 's' : ''}`;
+    const sidebarInfo = document.getElementById('sidebar-license-info');
+    if (sidebarInfo) {
+      const tierEl = document.getElementById('sidebar-license-tier');
+      const expiryEl = document.getElementById('sidebar-license-expiry');
+      if (tierEl) tierEl.textContent = info.tier === 'unlimited' ? 'Unlimited' : `${info.max_nodes} node${info.max_nodes !== 1 ? 's' : ''}`;
+      if (expiryEl && info.expires_at) {
+        const d = new Date(info.expires_at);
+        expiryEl.textContent = d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+      } else if (expiryEl) {
+        expiryEl.textContent = 'No expiry';
+      }
+      sidebarInfo.style.display = 'block';
+    }
   } catch(e) {
     // 402 = no license; show banner
     const banner = document.getElementById('license-banner');
@@ -2164,7 +2179,8 @@ async function uploadLicense() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     closeLicenseModal();
-    showToast(`License activated — ${data.tier} tier (${data.max_nodes === -1 ? 'unlimited' : data.max_nodes + ' nodes'})`, 'success');
+    const expMsg = data.expires_at ? ` · expires ${new Date(data.expires_at).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})}` : '';
+    showToast(`License activated — ${data.tier} tier (${data.max_nodes === -1 ? 'unlimited' : data.max_nodes + ' nodes'})${expMsg}`, 'success');
     checkLicenseStatus();
   } catch(e) {
     errEl.textContent = e.message || 'Upload failed';
