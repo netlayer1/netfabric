@@ -5,7 +5,7 @@ models.py — SQLAlchemy DB models + Pydantic request/response schemas
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, EmailStr
 
@@ -65,6 +65,10 @@ class Authgroup(Base):
 
 class Device(Base):
     __tablename__ = "devices"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_device_name_per_user"),
+        UniqueConstraint("user_id", "host", name="uq_device_host_per_user"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

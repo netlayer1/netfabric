@@ -471,6 +471,12 @@ def add_device(
             stored_username = ag.default_username
             stored_password = "__authgroup__"
 
+    # Uniqueness checks
+    if db.query(Device).filter(Device.user_id == current_user.id, Device.name == payload.name).first():
+        raise HTTPException(status_code=409, detail=f"A device named '{payload.name}' already exists.")
+    if db.query(Device).filter(Device.user_id == current_user.id, Device.host == payload.host).first():
+        raise HTTPException(status_code=409, detail=f"A device with IP '{payload.host}' already exists.")
+
     device = Device(
         user_id=current_user.id,
         name=payload.name,
@@ -510,6 +516,23 @@ def update_device(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Uniqueness checks (exclude current device)
+    if payload.name:
+        conflict = db.query(Device).filter(
+            Device.user_id == current_user.id,
+            Device.name == payload.name,
+            Device.id != device_id,
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"A device named '{payload.name}' already exists.")
+    if payload.host:
+        conflict = db.query(Device).filter(
+            Device.user_id == current_user.id,
+            Device.host == payload.host,
+            Device.id != device_id,
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"A device with IP '{payload.host}' already exists.")
     device = _get_owned_device(device_id, current_user.id, db)
 
     if payload.name is not None:
@@ -589,6 +612,125 @@ def delete_device(
     # Safe to delete — cascade handles the rest at DB level
     db.delete(device)
     db.commit()
+
+
+# ── Bulk operations (accept list of names or IDs) ────────────────────────────
+
+class BulkDeviceRequest(BaseModel):
+    names: List[str] = []   # device names
+    ids: List[int] = []     # device IDs (union with names)
+
+@app.post("/api/devices/bulk/delete", status_code=200)
+def bulk_delete_devices(
+    payload: BulkDeviceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete multiple devices by name or ID. Skips devices with active services."""
+    devices = _resolve_bulk_devices(payload, current_user.id, db)
+    deleted, skipped = [], []
+    for device in devices:
+        service_count = db.query(ServiceInstance).filter(ServiceInstance.device_id == device.id).count()
+        state_count = db.query(StateDeclaration).filter(StateDeclaration.device_id == device.id).count()
+        if service_count or state_count:
+            skipped.append({"name": device.name, "reason": f"{service_count} service(s) / {state_count} state(s) still active"})
+        else:
+            db.delete(device)
+            deleted.append(device.name)
+    db.commit()
+    return {"deleted": deleted, "skipped": skipped}
+
+
+@app.post("/api/devices/bulk/test", status_code=200)
+def bulk_test_devices(
+    payload: BulkDeviceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Test SSH connectivity for multiple devices by name or ID."""
+    devices = _resolve_bulk_devices(payload, current_user.id, db)
+    results = []
+    for device in devices:
+        try:
+            _do_test_device(device, current_user, db)
+            results.append({"name": device.name, "status": "ok"})
+        except Exception as e:
+            results.append({"name": device.name, "status": "error", "detail": str(e)})
+    return {"results": results}
+
+
+@app.post("/api/devices/bulk/sync-from", status_code=200)
+def bulk_sync_from(
+    payload: BulkDeviceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Sync config FROM multiple devices (pull)."""
+    devices = _resolve_bulk_devices(payload, current_user.id, db)
+    results = []
+    for device in devices:
+        try:
+            raw = _fetch_running_config(device, db)
+            snap = ConfigSnapshot(device_id=device.id, user_id=current_user.id, config_text=raw)
+            db.add(snap)
+            device.sync_state = "in-sync"
+            db.commit()
+            results.append({"name": device.name, "status": "ok"})
+        except Exception as e:
+            results.append({"name": device.name, "status": "error", "detail": str(e)})
+    return {"results": results}
+
+
+@app.post("/api/devices/bulk/check-sync", status_code=200)
+def bulk_check_sync(
+    payload: BulkDeviceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check sync state for multiple devices."""
+    devices = _resolve_bulk_devices(payload, current_user.id, db)
+    results = []
+    for device in devices:
+        snap = db.query(ConfigSnapshot).filter(
+            ConfigSnapshot.device_id == device.id
+        ).order_by(ConfigSnapshot.created_at.desc()).first()
+        if not snap:
+            results.append({"name": device.name, "status": "no-snapshot"})
+            continue
+        try:
+            live = _fetch_running_config(device, db)
+            in_sync = live.strip() == snap.config_text.strip()
+            device.sync_state = "in-sync" if in_sync else "out-of-sync"
+            db.commit()
+            results.append({"name": device.name, "status": device.sync_state})
+        except Exception as e:
+            results.append({"name": device.name, "status": "error", "detail": str(e)})
+    return {"results": results}
+
+
+def _resolve_bulk_devices(payload: BulkDeviceRequest, user_id: int, db: Session) -> list:
+    """Return Device objects matching names or IDs, owned by user."""
+    devices = []
+    seen_ids = set()
+    if payload.names:
+        rows = db.query(Device).filter(
+            Device.user_id == user_id,
+            Device.name.in_(payload.names),
+        ).all()
+        for d in rows:
+            if d.id not in seen_ids:
+                devices.append(d)
+                seen_ids.add(d.id)
+    if payload.ids:
+        rows = db.query(Device).filter(
+            Device.user_id == user_id,
+            Device.id.in_(payload.ids),
+        ).all()
+        for d in rows:
+            if d.id not in seen_ids:
+                devices.append(d)
+                seen_ids.add(d.id)
+    return devices
 
 
 @app.post("/api/devices/{device_id}/test")
