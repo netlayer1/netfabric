@@ -162,6 +162,13 @@ def health():
 # License
 # ─────────────────────────────────────────────
 
+@app.get("/api/machine-id")
+def machine_id_endpoint(current_user: User = Depends(get_current_user)):
+    """Return this installation's machine ID for license binding."""
+    from backend.license_guard import get_or_create_machine_id
+    return {"machine_id": get_or_create_machine_id()}
+
+
 @app.get("/api/license")
 def license_info(current_user: User = Depends(get_current_user)):
     """Return the active license tier and node cap (no secret data exposed)."""
@@ -672,7 +679,7 @@ def bulk_sync_from(
     for device in devices:
         try:
             raw = _fetch_running_config(device, db)
-            snap = ConfigSnapshot(device_id=device.id, user_id=current_user.id, config_text=raw)
+            snap = ConfigSnapshot(device_id=device.id, config=raw)
             db.add(snap)
             device.sync_state = "in-sync"
             db.commit()

@@ -2143,6 +2143,11 @@ function openLicenseModal() {
   document.getElementById('license-upload-btn').disabled = true;
   document.getElementById('license-upload-error').classList.add('hidden');
   document.getElementById('license-modal').classList.remove('hidden');
+  // Fetch and display machine ID
+  api('GET', '/api/machine-id').then(r => {
+    const el = document.getElementById('license-machine-id');
+    if (el) el.textContent = r.machine_id;
+  }).catch(() => {});
 }
 
 function closeLicenseModal() {
@@ -5703,7 +5708,14 @@ function closeLldReport() {
 <div id="license-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:#111318;border:1px solid #2a2d35;border-radius:8px;padding:28px 32px;width:420px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.8);">
     <h3 style="margin:0 0 6px;font-size:16px;color:#f1f3f9;">Activate License</h3>
-    <p style="font-size:13px;color:#8b92a5;margin:0 0 20px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
+    <p style="font-size:13px;color:#8b92a5;margin:0 0 12px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
+    <div style="background:#0d0f14;border:1px solid #2a2d35;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:12px;">
+      <div style="color:#8b92a5;margin-bottom:4px;">Machine ID <span style="font-size:10px;">(send this to NetFabric support)</span></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <code id="license-machine-id" style="color:#f1f3f9;font-size:11px;flex:1;word-break:break-all;">Loading…</code>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('license-machine-id').textContent)" style="background:#1e2130;border:1px solid #2a2d35;border-radius:4px;color:#8b92a5;font-size:11px;padding:3px 8px;cursor:pointer;white-space:nowrap;">Copy</button>
+      </div>
+    </div>
     <div id="license-drop-zone" style="border:2px dashed #2a2d35;border-radius:8px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;font-size:13px;color:#8b92a5;background:#0d0f14;"
          onclick="document.getElementById('license-file-input').click()"
          ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"

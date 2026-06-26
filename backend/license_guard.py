@@ -17,6 +17,7 @@ import json
 import hmac
 import hashlib
 import os
+import uuid
 
 # ── Secret key baked into the compiled binary ─────────────────────────────────
 # Change this before distributing. Keep it out of version control.
@@ -27,6 +28,21 @@ _SECRET_KEY = b"nf-license-secret-change-before-release"
 _LICENSE_PATH = os.environ.get(
     "NETFABRIC_LICENSE", "/app/data/license.json"
 )
+
+# ── Machine ID — generated once, persisted in the data volume ────────────────
+_MACHINE_ID_PATH = "/app/data/machine_id"
+
+
+def get_or_create_machine_id() -> str:
+    """Return a stable machine ID, creating one on first call."""
+    if os.path.exists(_MACHINE_ID_PATH):
+        with open(_MACHINE_ID_PATH) as f:
+            return f.read().strip()
+    machine_id = str(uuid.uuid4())
+    os.makedirs(os.path.dirname(_MACHINE_ID_PATH), exist_ok=True)
+    with open(_MACHINE_ID_PATH, "w") as f:
+        f.write(machine_id)
+    return machine_id
 
 
 def save_license(raw: dict) -> None:
@@ -44,6 +60,15 @@ def save_license(raw: dict) -> None:
     expected = hmac.new(_SECRET_KEY, body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(provided_sig, expected):
         raise LicenseError("License signature invalid — file may be tampered with.")
+    # Machine binding check
+    licensed_mid = check.get("machine_id")
+    if licensed_mid:
+        local_mid = get_or_create_machine_id()
+        if licensed_mid != local_mid:
+            raise LicenseError(
+                f"License is bound to a different machine. "
+                f"This machine ID is: {local_mid}"
+            )
     os.makedirs(os.path.dirname(_LICENSE_PATH), exist_ok=True)
     with open(_LICENSE_PATH, "w") as fh:
         _json.dump(raw, fh, indent=2)
@@ -95,6 +120,16 @@ def _load_and_verify() -> dict:
             raise LicenseError(
                 f"License expired on {expiry.strftime('%Y-%m-%d')}. "
                 "Contact support to renew."
+            )
+
+    # Machine binding check
+    licensed_mid = data.get("machine_id")
+    if licensed_mid:
+        local_mid = get_or_create_machine_id()
+        if licensed_mid != local_mid:
+            raise LicenseError(
+                f"License is bound to a different machine. "
+                f"This machine ID is: {local_mid}"
             )
 
     # Restore signature so callers can inspect if needed

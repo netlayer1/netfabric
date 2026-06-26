@@ -14,8 +14,11 @@ Tiers:
     unlimited   →  no cap
 
 Examples:
-    # 10-node license for Acme Corp
+    # 10-node license for Acme Corp (unbound)
     python scripts/generate_license.py acme-corp 10
+
+    # 10-node license bound to a specific machine
+    python scripts/generate_license.py acme-corp 10 --machine-id 550e8400-e29b-41d4-a716-446655440000
 
     # 100-node license, custom output path
     python scripts/generate_license.py bigco-inc 100 --out /tmp/bigco.json
@@ -44,7 +47,7 @@ TIERS: dict[str, int] = {
 }
 
 
-def generate_license(customer_id: str, tier: str) -> dict:
+def generate_license(customer_id: str, tier: str, machine_id: str = None) -> dict:
     if tier not in TIERS:
         raise ValueError(
             f"Unknown tier '{tier}'. Valid tiers: {', '.join(TIERS)}"
@@ -58,6 +61,9 @@ def generate_license(customer_id: str, tier: str) -> dict:
         "issued_at": now.isoformat(),
         "expires_at": now.replace(year=now.year + 1).isoformat(),
     }
+
+    if machine_id:
+        payload["machine_id"] = machine_id
 
     # Sign the canonical JSON (sort_keys so order never matters)
     body = json.dumps(payload, sort_keys=True).encode()
@@ -81,10 +87,15 @@ def main() -> None:
         default=None,
         help="Output path (default: license_<customer_id>.json in current dir)",
     )
+    parser.add_argument(
+        "--machine-id",
+        default=None,
+        help="Bind license to a specific machine ID (customer copies from the UI)",
+    )
     args = parser.parse_args()
 
     try:
-        license_data = generate_license(args.customer_id, args.tier)
+        license_data = generate_license(args.customer_id, args.tier, args.machine_id)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -100,6 +111,8 @@ def main() -> None:
     print(f"  max_nodes   : {cap_str}")
     print(f"  issued_at   : {license_data['issued_at']}")
     print(f"  expires_at  : {license_data['expires_at']}")
+    if args.machine_id:
+        print(f"  machine_id  : {args.machine_id}  ← bound to this machine only")
     print()
     print("Send the license file to the customer.")
     print("They upload it via the web UI on first login.")
