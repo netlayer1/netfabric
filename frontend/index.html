@@ -677,7 +677,7 @@
 
   <!-- License upload modal -->
   <div id="license-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;">
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:420px;max-width:90vw;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:420px;max-width:90vw;">
       <h3 style="margin:0 0 6px;font-size:16px;">Activate License</h3>
       <p style="font-size:13px;color:var(--muted);margin:0 0 20px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
       <div id="license-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;font-size:13px;color:var(--muted);"
@@ -721,7 +721,7 @@
         </div>
         <div class="nav-item" data-page="neds" onclick="showPage('neds')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
-          <span class="nav-label">NEDs &amp; Authgroups</span>
+          <span class="nav-label">NDs &amp; Authgroups</span>
         </div>
         <div class="nav-item" data-page="services" onclick="showPage('services')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -1248,19 +1248,19 @@
       </div>
 
       <!-- ══════════════════════════════════════════════ -->
-      <!-- NEDs & Authgroups Page                        -->
+      <!-- NDs & Authgroups Page                         -->
       <!-- ══════════════════════════════════════════════ -->
       <div id="page-neds" class="hidden">
         <div class="page-header">
-          <h2>NEDs &amp; Authgroups</h2>
+          <h2>NDs &amp; Authgroups</h2>
           <button class="btn btn-ghost" style="font-size:12px;" onclick="loadNeds()">↻ Refresh</button>
         </div>
         <div class="page-content">
 
           <!-- NED Registry -->
           <div style="margin-bottom:32px;">
-            <div class="home-section-title" style="margin-top:0;">NED Registry</div>
-            <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">Network Element Drivers registered in this orchestrator. Each NED handles one vendor/platform.</p>
+            <div class="home-section-title" style="margin-top:0;">ND Registry</div>
+            <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">Network Drivers registered in this orchestrator. Each ND handles one vendor/platform.</p>
             <div id="ned-registry-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;"></div>
           </div>
 
@@ -1269,7 +1269,6 @@
             <div class="flex items-center justify-between" style="margin-bottom:14px;">
               <div>
                 <div class="home-section-title" style="margin-top:0;margin-bottom:4px;">Authgroups</div>
-                <p style="color:var(--muted);font-size:12px;">Named credential sets shared across devices (like NSO authgroups).</p>
               </div>
               <button class="btn btn-primary" style="font-size:12px;" onclick="openAuthgroupModal()">+ New Authgroup</button>
             </div>

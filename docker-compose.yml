@@ -30,7 +30,7 @@ services:
       - ./frontend:/app/frontend
       # License file — customer drops license.json next to this file.
       # Mount is read-only so the app cannot modify it.
-      - ./license.json:/app/license/license.json:ro
+      - ./license.json:/app/data/license.json:ro
     depends_on:
       db:
         condition: service_healthy
