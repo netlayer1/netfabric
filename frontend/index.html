@@ -675,27 +675,6 @@
     <button class="btn" style="background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);color:#fca5a5;font-size:12px;padding:4px 12px;" onclick="openLicenseModal()">Upload License</button>
   </div>
 
-  <!-- License upload modal -->
-  <div id="license-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:420px;max-width:90vw;">
-      <h3 style="margin:0 0 6px;font-size:16px;">Activate License</h3>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 20px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
-      <div id="license-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;font-size:13px;color:var(--muted);"
-           onclick="document.getElementById('license-file-input').click()"
-           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
-           ondragleave="this.style.borderColor='var(--border)'"
-           ondrop="handleLicenseDrop(event)">
-        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:8px;opacity:.5;display:block;margin-left:auto;margin-right:auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <div id="license-file-name">Click or drag license.json here</div>
-      </div>
-      <input type="file" id="license-file-input" accept=".json" style="display:none" onchange="handleLicenseFileSelect(this)">
-      <div id="license-upload-error" class="hidden" style="color:var(--danger);font-size:12px;margin-bottom:12px;padding:8px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeLicenseModal()">Cancel</button>
-        <button class="btn btn-primary" id="license-upload-btn" onclick="uploadLicense()" disabled>Activate</button>
-      </div>
-    </div>
-  </div>
 
   <div class="app-body">
     <!-- Sidebar -->
@@ -5719,6 +5698,28 @@ function closeLldReport() {
   document.getElementById('lld-report-section').classList.add('hidden');
 }
 </script>
+
+<!-- License upload modal — outside #app to avoid stacking context issues -->
+<div id="license-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#111318;border:1px solid #2a2d35;border-radius:8px;padding:28px 32px;width:420px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.8);">
+    <h3 style="margin:0 0 6px;font-size:16px;color:#f1f3f9;">Activate License</h3>
+    <p style="font-size:13px;color:#8b92a5;margin:0 0 20px;">Upload the <code>license.json</code> file provided by NetFabric support.</p>
+    <div id="license-drop-zone" style="border:2px dashed #2a2d35;border-radius:8px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;font-size:13px;color:#8b92a5;background:#0d0f14;"
+         onclick="document.getElementById('license-file-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+         ondragleave="this.style.borderColor='#2a2d35'"
+         ondrop="handleLicenseDrop(event)">
+      <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:8px;opacity:.5;display:block;margin-left:auto;margin-right:auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div id="license-file-name">Click or drag license.json here</div>
+    </div>
+    <input type="file" id="license-file-input" accept=".json" style="display:none" onchange="handleLicenseFileSelect(this)">
+    <div id="license-upload-error" class="hidden" style="color:#ef4444;font-size:12px;margin-bottom:12px;padding:8px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeLicenseModal()">Cancel</button>
+      <button class="btn btn-primary" id="license-upload-btn" onclick="uploadLicense()" disabled>Activate</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
