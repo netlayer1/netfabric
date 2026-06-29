@@ -707,7 +707,7 @@ def bulk_check_sync(
             continue
         try:
             live = _fetch_running_config(device, db)
-            in_sync = live.strip() == snap.config_text.strip()
+            in_sync = live.strip() == snap.config.strip()
             device.sync_state = "in-sync" if in_sync else "out-of-sync"
             db.commit()
             results.append({"name": device.name, "status": device.sync_state})
