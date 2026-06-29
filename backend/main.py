@@ -660,8 +660,18 @@ def bulk_test_devices(
     results = []
     for device in devices:
         try:
-            _do_test_device(device, current_user, db)
-            results.append({"name": device.name, "status": "ok"})
+            username, plain_password = _resolve_device_credentials(device, db)
+            result = device_connector.test_connectivity(
+                host=device.host,
+                username=username,
+                password=plain_password,
+                device_type=device.device_type,
+                port=device.port,
+            )
+            if result["success"]:
+                device.last_seen = datetime.utcnow()
+                db.commit()
+            results.append({"name": device.name, "status": "ok" if result["success"] else "error", "detail": result.get("error", "")})
         except Exception as e:
             results.append({"name": device.name, "status": "error", "detail": str(e)})
     return {"results": results}
@@ -701,7 +711,7 @@ def bulk_check_sync(
     for device in devices:
         snap = db.query(ConfigSnapshot).filter(
             ConfigSnapshot.device_id == device.id
-        ).order_by(ConfigSnapshot.created_at.desc()).first()
+        ).order_by(ConfigSnapshot.fetched_at.desc()).first()
         if not snap:
             results.append({"name": device.name, "status": "no-snapshot"})
             continue
