@@ -356,8 +356,15 @@ class ApplyConfigResponse(BaseModel):
 
 class ServiceTemplate(Base):
     """
-    A reusable service template — Jinja2 body + YAML variable schema.
-    Customers create these themselves; no code changes needed.
+    A reusable multi-vendor service template.
+
+    A service is ND-agnostic: it holds one shared variable schema (YANG YAML)
+    and one Jinja2 template per supported ND in nd_templates.
+    The Service Manager picks the right template at deploy time based on the
+    target device's ND ID.
+
+    Backward-compat: ned_id / template_body kept for old single-ND services.
+    New services use nd_templates and leave ned_id null.
     """
     __tablename__ = "service_templates"
 
@@ -365,18 +372,18 @@ class ServiceTemplate(Base):
     user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
     name          = Column(String, nullable=False)
     description   = Column(String, default="")
-    # NED this template targets — used to select the right CLI dialect
-    # e.g. "fortinet-fortios-cli-1.0", "cisco-ios-cli-1.0"
+
+    # ── Legacy single-ND fields (kept for backward compat) ───────────────
     ned_id        = Column(String, nullable=True)
-    # Jinja2 template that renders to CLI commands (one per line)
     template_body = Column(Text, nullable=False, default="")
-    # YAML that defines variable schema:
-    #   interface_name:
-    #     label: Interface Name
-    #     type: string
-    #     default: Loopback0
-    #     required: true
+
+    # ── Multi-vendor: one Jinja2 template per ND ─────────────────────────
+    # {"cisco-ios-cli-1.0": "interface ...", "fortinet-fortios-cli-1.0": "config ..."}
+    nd_templates  = Column(JSON, nullable=False, default=dict)
+
+    # ── Shared variable schema (YANG YAML) — same vars across all NDs ────
     variables_schema = Column(Text, nullable=False, default="")
+
     created_at    = Column(DateTime, default=datetime.utcnow)
     updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -405,9 +412,10 @@ class ServiceInstance(Base):
 class ServiceTemplateCreate(BaseModel):
     name: str
     description: str = ""
-    ned_id: Optional[str] = None
-    template_body: str
-    variables_schema: str   # raw YAML text
+    ned_id: Optional[str] = None          # legacy single-ND (kept for compat)
+    template_body: str = ""               # legacy single-ND template
+    nd_templates: dict = {}               # {nd_id: jinja2_template_text}
+    variables_schema: str = ""            # shared YANG YAML
 
 
 class ServiceTemplateUpdate(BaseModel):
@@ -415,6 +423,7 @@ class ServiceTemplateUpdate(BaseModel):
     description: Optional[str] = None
     ned_id: Optional[str] = None
     template_body: Optional[str] = None
+    nd_templates: Optional[dict] = None
     variables_schema: Optional[str] = None
 
 
@@ -424,6 +433,7 @@ class ServiceTemplateResponse(BaseModel):
     description: str
     ned_id: Optional[str] = None
     template_body: str
+    nd_templates: dict = {}
     variables_schema: str
     created_at: datetime
     updated_at: datetime

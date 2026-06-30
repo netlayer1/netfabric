@@ -1598,64 +1598,67 @@
 
 <!-- ── Service Create / Edit Modal ───────────────── -->
 <div id="svc-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSvcModal()">
-  <div class="modal" style="width:680px;max-height:90vh;display:flex;flex-direction:column;">
+  <div class="modal" style="width:720px;max-height:90vh;display:flex;flex-direction:column;">
 
     <h3 id="svc-modal-title">New Service</h3>
+    <p class="text-muted text-sm" style="margin:-6px 0 12px;">
+      Services are generic — one shared variable schema, one template per ND.
+      The Service Manager picks the right template at deploy time.
+    </p>
 
     <!-- Name + Description -->
     <div class="form-group">
       <label>Service Name *</label>
-      <input type="text" id="svc-name" placeholder="e.g. Create Loopback Interface" />
+      <input type="text" id="svc-name" placeholder="e.g. Configure VLAN" />
     </div>
     <div class="form-group">
       <label>Description</label>
       <input type="text" id="svc-desc" placeholder="Optional — what does this service do?" />
     </div>
-    <div class="form-group">
-      <label>Target NED <span class="text-muted" style="font-weight:400;">— CLI dialect for this service</span></label>
-      <select id="svc-ned-id">
-        <option value="">Any / Not specified</option>
-        <option value="cisco-ios-cli-1.0">Cisco IOS</option>
-        <option value="cisco-iosxr-cli-1.0">Cisco IOS-XR</option>
-        <option value="fortinet-fortios-cli-1.0">Fortinet FortiOS</option>
-        <option value="juniper-junos-cli-1.0">Juniper JunOS</option>
-      </select>
-    </div>
 
-    <!-- Mode toggle (pill style, 3 tabs) -->
+    <!-- Tab bar: Variables | IOS-XE | FortiGate -->
     <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;">
-      <button id="svc-tab-vars" class="btn btn-primary svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('vars')">Variables</button>
-      <button id="svc-tab-tpl"  class="btn btn-ghost  svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('tpl')">Jinja2 Template</button>
-      <button id="svc-tab-cli"  class="btn btn-ghost  svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 16px;" onclick="svcSwitchTab('cli')">CLI Paste</button>
+      <button id="svc-tab-vars"   class="btn btn-primary svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 14px;" onclick="svcSwitchTab('vars')">Variables</button>
+      <button id="svc-tab-iosxe"  class="btn btn-ghost   svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 14px;" onclick="svcSwitchTab('iosxe')">IOS-XE</button>
+      <button id="svc-tab-forti"  class="btn btn-ghost   svc-mode-btn" style="border-radius:0;font-size:12px;padding:6px 14px;" onclick="svcSwitchTab('forti')">FortiGate</button>
     </div>
 
-    <!-- Variables panel -->
-    <div id="svc-panel-vars" class="form-group" style="flex:1;">
-      <label style="display:flex;align-items:center;justify-content:space-between;">
-        <span>Variables <span class="text-muted" style="font-weight:400;">— one per line: <code style="color:var(--accent);font-size:11px;">name:default_value</code></span></span>
+    <!-- Variables panel (shared schema) -->
+    <div id="svc-panel-vars" style="flex:1;display:flex;flex-direction:column;">
+      <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:600;">Shared Variable Schema <span class="text-muted" style="font-weight:400;">— YANG-typed, same across all NDs</span></span>
         <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="svcInsertExample(event)">Insert example</button>
       </label>
-      <textarea id="svc-schema" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"
-        placeholder="interface_name:Loopback0&#10;ip_address:1.1.1.1&#10;subnet_mask:255.255.255.255&#10;description:Managed by NOC"></textarea>
+      <textarea id="svc-schema" style="font-family:monospace;font-size:12px;flex:1;min-height:300px;resize:vertical;"
+        placeholder="vlan_id:&#10;  type: uint16&#10;  label: VLAN ID&#10;  default: 100&#10;  required: true&#10;ip_address:&#10;  type: ipv4-address&#10;  label: IP Address&#10;  default: 192.168.1.1&#10;  required: true"></textarea>
     </div>
 
-    <!-- Template panel -->
-    <div id="svc-panel-tpl" class="form-group hidden" style="flex:1;">
-      <label style="display:flex;align-items:center;justify-content:space-between;">
-        <span>Jinja2 Template <span class="text-muted" style="font-weight:400;">— use <code style="color:var(--accent);font-size:11px;">{{ variable_name }}</code></span></span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="svcInsertExample(event)">Insert example</button>
-      </label>
-      <textarea id="svc-template" style="font-family:monospace;font-size:12px;min-height:300px;resize:vertical;"
-        placeholder="interface {{ interface_name }}&#10; description {{ description }}&#10; ip address {{ ip_address }} {{ subnet_mask }}&#10; no shutdown"></textarea>
+    <!-- IOS-XE ND panel -->
+    <div id="svc-panel-iosxe" style="flex:1;display:none;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:12px;font-weight:600;">IOS-XE Template <span class="text-muted" style="font-weight:400;">cisco-ios-cli-1.0</span></span>
+        <span id="svc-iosxe-status" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <textarea id="svc-cli-iosxe" style="font-family:monospace;font-size:12px;min-height:130px;resize:vertical;"
+        placeholder="Paste IOS-XE CLI here, then click Convert&#10;&#10;interface GigabitEthernet0/1.{{ vlan_id }}&#10; encapsulation dot1Q {{ vlan_id }}&#10; ip address {{ ip_address }} {{ netmask }}"></textarea>
+      <button class="btn btn-ghost" style="width:100%;font-size:12px;" onclick="svcCliConvert('cisco-ios-cli-1.0','iosxe')">⚙ Convert IOS-XE CLI → Template + Variables</button>
+      <label style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;">JINJA2 TEMPLATE</label>
+      <textarea id="svc-template-iosxe" style="font-family:monospace;font-size:12px;min-height:130px;resize:vertical;"
+        placeholder="Rendered automatically after Convert, or write manually"></textarea>
     </div>
 
-    <!-- CLI Paste panel -->
-    <div id="svc-panel-cli" class="form-group hidden" style="flex:1;">
-      <label>Paste CLI Config — IOS or FortiOS syntax is auto-detected</label>
-      <textarea id="svc-cli" style="font-family:monospace;font-size:12px;min-height:240px;resize:vertical;"
-        placeholder="IOS example:&#10;interface Loopback0&#10; description Managed by NOC&#10; ip address 1.1.1.1 255.255.255.255&#10;&#10;FortiOS example:&#10;config system interface&#10;edit port3&#10;set description Managed by NOC&#10;next&#10;end"></textarea>
-      <div class="text-muted text-sm" style="margin-top:6px;">IP addresses, interface names, and descriptions are auto-extracted as variables.</div>
-      <button class="btn btn-primary" style="margin-top:10px;width:100%;" onclick="svcCliConvert()">⚙ Convert to Variables + Template</button>
+    <!-- FortiGate ND panel -->
+    <div id="svc-panel-forti" style="flex:1;display:none;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:12px;font-weight:600;">FortiGate Template <span class="text-muted" style="font-weight:400;">fortinet-fortios-cli-1.0</span></span>
+        <span id="svc-forti-status" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <textarea id="svc-cli-forti" style="font-family:monospace;font-size:12px;min-height:130px;resize:vertical;"
+        placeholder="Paste FortiGate CLI here, then click Convert&#10;&#10;config system interface&#10;edit &quot;VLAN{{ vlan_id }}&quot;&#10;set vlanid {{ vlan_id }}&#10;set ip {{ ip_address }} {{ netmask }}&#10;next&#10;end"></textarea>
+      <button class="btn btn-ghost" style="width:100%;font-size:12px;" onclick="svcCliConvert('fortinet-fortios-cli-1.0','forti')">⚙ Convert FortiGate CLI → Template + Variables</button>
+      <label style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;">JINJA2 TEMPLATE</label>
+      <textarea id="svc-template-forti" style="font-family:monospace;font-size:12px;min-height:130px;resize:vertical;"
+        placeholder="Rendered automatically after Convert, or write manually"></textarea>
     </div>
 
     <div class="modal-footer">
@@ -3010,24 +3013,50 @@ function renderServicesList(svcs) {
   }).join('');
 }
 
+// ── Service modal: per-ND tabs ───────────────────────────────────────────────
+// Tabs: vars | iosxe | forti
+// Each ND tab has its own CLI paste area + Jinja2 template textarea.
+// The shared variable schema is merged automatically after each Convert.
+
+const _SVC_ND_TABS = ['vars','iosxe','forti'];
+
+function svcSwitchTab(tab) {
+  _SVC_ND_TABS.forEach(t => {
+    const panel = document.getElementById(`svc-panel-${t}`);
+    const btn   = document.getElementById(`svc-tab-${t}`);
+    if (panel) panel.style.display = t === tab ? 'flex' : 'none';
+    if (btn) {
+      btn.className = `btn ${t === tab ? 'btn-primary' : 'btn-ghost'} svc-mode-btn`;
+      btn.style.cssText = 'border-radius:0;font-size:12px;padding:6px 14px;';
+    }
+  });
+}
+
 async function openServiceModal(id = null) {
   _svcEditId = id;
   document.getElementById('svc-modal-title').textContent = id ? 'Edit Service' : 'New Service';
-  document.getElementById('svc-name').value     = '';
-  document.getElementById('svc-desc').value     = '';
-  document.getElementById('svc-ned-id').value   = '';
-  document.getElementById('svc-schema').value   = '';
-  document.getElementById('svc-template').value = '';
-  document.getElementById('svc-cli').value      = '';
+  document.getElementById('svc-name').value            = '';
+  document.getElementById('svc-desc').value            = '';
+  document.getElementById('svc-schema').value          = '';
+  document.getElementById('svc-template-iosxe').value  = '';
+  document.getElementById('svc-template-forti').value  = '';
+  document.getElementById('svc-cli-iosxe').value       = '';
+  document.getElementById('svc-cli-forti').value       = '';
+  document.getElementById('svc-iosxe-status').textContent = '';
+  document.getElementById('svc-forti-status').textContent = '';
 
   if (id) {
     try {
       const svc = await api('GET', `/api/services/${id}`);
-      document.getElementById('svc-name').value     = svc.name;
-      document.getElementById('svc-desc').value     = svc.description;
-      document.getElementById('svc-ned-id').value   = svc.ned_id || '';
-      document.getElementById('svc-schema').value   = svc.variables_schema;
-      document.getElementById('svc-template').value = svc.template_body;
+      document.getElementById('svc-name').value   = svc.name;
+      document.getElementById('svc-desc').value   = svc.description;
+      document.getElementById('svc-schema').value = svc.variables_schema || '';
+      const nd = svc.nd_templates || {};
+      if (nd['cisco-ios-cli-1.0'])          document.getElementById('svc-template-iosxe').value = nd['cisco-ios-cli-1.0'];
+      if (nd['fortinet-fortios-cli-1.0'])   document.getElementById('svc-template-forti').value = nd['fortinet-fortios-cli-1.0'];
+      // mark configured NDs
+      if (nd['cisco-ios-cli-1.0'])        document.getElementById('svc-iosxe-status').textContent = '✓ configured';
+      if (nd['fortinet-fortios-cli-1.0']) document.getElementById('svc-forti-status').textContent = '✓ configured';
     } catch(e) { showToast('Failed to load service', 'error'); return; }
   }
   svcSwitchTab('vars');
@@ -3040,67 +3069,80 @@ function closeSvcModal() {
 }
 
 async function saveSvcTemplate() {
+  const name = document.getElementById('svc-name').value.trim();
+  if (!name) { showToast('Service name is required', 'error'); return; }
+
+  // Collect nd_templates from each ND tab
+  const nd_templates = {};
+  const iosxeTpl = document.getElementById('svc-template-iosxe').value.trim();
+  const fortiTpl = document.getElementById('svc-template-forti').value.trim();
+  if (iosxeTpl) nd_templates['cisco-ios-cli-1.0']         = iosxeTpl;
+  if (fortiTpl) nd_templates['fortinet-fortios-cli-1.0']  = fortiTpl;
+
   const payload = {
-    name:             document.getElementById('svc-name').value.trim(),
+    name,
     description:      document.getElementById('svc-desc').value.trim(),
-    ned_id:           document.getElementById('svc-ned-id').value || null,
     variables_schema: document.getElementById('svc-schema').value,
-    template_body:    document.getElementById('svc-template').value,
+    nd_templates,
+    template_body:    '',   // legacy — not used for new services
   };
-  if (!payload.name) { toast('Service name is required', 'error'); return; }
 
   const btn = document.querySelector('#svc-modal .btn-primary');
   btn.disabled = true; btn.textContent = 'Saving…';
-
   try {
     if (_svcEditId) {
       await api('PUT', `/api/services/${_svcEditId}`, payload);
-      toast('Service updated', 'success');
+      showToast('Service updated', 'success');
     } else {
       await api('POST', '/api/services', payload);
-      toast('Service created', 'success');
+      showToast('Service created', 'success');
     }
     closeSvcModal();
     loadServices();
-  } catch(e) { toast(e.message || 'Save failed', 'error'); }
-  btn.disabled = false; btn.textContent = 'Save Service';
+  } catch(e) { showToast(e.message || 'Save failed', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Save Service'; }
 }
 
-function svcSwitchTab(tab) {
-  ['vars','tpl','cli'].forEach(t => {
-    document.getElementById(`svc-panel-${t}`).classList.toggle('hidden', t !== tab);
-    const btn = document.getElementById(`svc-tab-${t}`);
-    if (btn) {
-      btn.className = `btn ${t === tab ? 'btn-primary' : 'btn-ghost'} svc-mode-btn`;
-      btn.style.cssText = 'border-radius:0;font-size:12px;padding:6px 16px;';
-    }
-  });
-}
+// ndKey: 'iosxe' | 'forti' — matches the tab suffix
+// ndId:  the ND registry ID sent to the API
+async function svcCliConvert(ndId, ndKey) {
+  const cliEl  = document.getElementById(`svc-cli-${ndKey}`);
+  const tplEl  = document.getElementById(`svc-template-${ndKey}`);
+  const statEl = document.getElementById(`svc-${ndKey}-status`);
+  const raw    = cliEl?.value?.trim();
+  if (!raw) { showToast('Paste some CLI config first', 'error'); return; }
 
-async function svcCliConvert() {
-  const raw = document.getElementById('svc-cli').value;
-  if (!raw.trim()) { showToast('Paste some CLI config first', 'error'); return; }
-
-  // NED ID comes from the service being edited, falling back to IOS-XE.
-  const nedId = document.getElementById('svc-ned-id')?.value || 'cisco-ios-cli-1.0';
-
-  const btn = document.querySelector('#svc-modal .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Converting…'; }
-
+  statEl.textContent = 'Converting…';
   try {
-    const r = await api('POST', `/api/neds/${encodeURIComponent(nedId)}/cli-convert`, { cli: raw });
-    document.getElementById('svc-schema').value   = r.schema;
-    document.getElementById('svc-template').value = r.template;
+    const r = await api('POST', `/api/neds/${encodeURIComponent(ndId)}/cli-convert`, { cli: raw });
+    tplEl.value = r.template;
+
+    // Merge returned schema into the shared schema field
+    const currentSchema = document.getElementById('svc-schema').value.trim();
+    if (r.schema) {
+      // If the service already exists, merge server-side; otherwise just set it
+      if (_svcEditId) {
+        const merged = await api('PUT', `/api/services/${_svcEditId}/nd-templates/${encodeURIComponent(ndId)}`, {
+          template:    r.template,
+          schema_yaml: r.schema,
+        });
+        document.getElementById('svc-schema').value = merged.variables_schema || r.schema;
+      } else {
+        // Not yet saved — just append new vars that aren't already in the schema
+        document.getElementById('svc-schema').value = currentSchema
+          ? currentSchema + '\n' + r.schema
+          : r.schema;
+      }
+    }
+
+    statEl.textContent = `✓ ${r.variable_count} var${r.variable_count !== 1 ? 's' : ''} extracted`;
     showToast(`Converted — ${r.variable_count} variable${r.variable_count !== 1 ? 's' : ''} extracted`, 'success');
     svcSwitchTab('vars');
   } catch(e) {
+    statEl.textContent = '✗ failed';
     showToast(e.message || 'Conversion failed', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
-
-// CLI conversion is handled by POST /api/neds/{ned_id}/cli-convert (backend ND drivers).
 
 
 function svcInsertExample(e) {

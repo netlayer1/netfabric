@@ -91,6 +91,58 @@ class CiscoIOSXEDriver(BaseDriver):
                 return stripped
         return self.parse_version(raw_version)
 
+    def normalize_for_diff(self, config: str) -> str:
+        """
+        Strip IOS-XE volatile lines before diffing so they never show as changes.
+
+        Lines filtered:
+          - "! Last configuration change at …"   — timestamp changes on every save
+          - "Building configuration…"             — header noise
+          - "Current configuration : N bytes"     — byte count changes trivially
+          - Certificate/key hex blocks (long hex lines inside pki chains)
+          - ntp clock-period                      — auto-adjusted by NTP
+        """
+        _VOLATILE = re.compile(
+            r'^\s*('
+            r'!?\s*Last configuration change'   # timestamp
+            r'|Building configuration'          # header
+            r'|Current configuration\s*:'       # byte count header
+            r'|ntp clock-period'                # auto-adjusted
+            r'|[0-9A-F]{8}(\s+[0-9A-F]{8})+'  # hex cert/key lines
+            r')',
+            re.IGNORECASE,
+        )
+        return '\n'.join(
+            line for line in config.splitlines()
+            if not _VOLATILE.match(line)
+        )
+
+    # ── NED-level validation override ────────────────────────────────────
+
+    def validate_vars(self, values: dict, schema_yaml: str) -> dict[str, str | None]:
+        """
+        IOS-XE-specific validation on top of the default YANG type checks.
+        Fixes up known cases where old schemas may have inferred the wrong type
+        (e.g. loopback number saved as uint8 when IOS-XE allows 0–2147483647).
+        """
+        import yaml as _yaml
+        try:
+            schema = _yaml.safe_load(schema_yaml or '') or {}
+        except Exception:
+            schema = {}
+
+        # Patch: if 'number' is typed as uint8/uint16 but looks like an interface
+        # number (no dots/slashes → it's a Loopback/Tunnel), widen the range.
+        if 'number' in schema:
+            spec = schema['number']
+            if isinstance(spec, dict) and spec.get('type') in ('uint8', 'uint16'):
+                spec = dict(spec, type='uint32', range='0..2147483647')
+                schema['number'] = spec
+
+        import yaml as _yaml2
+        patched_yaml = _yaml2.dump(schema)
+        return super().validate_vars(values, patched_yaml)
+
     # ── CLI → YANG template converter ────────────────────────────────────
 
     def cli_to_template(self, raw_cli: str) -> dict:
@@ -152,7 +204,20 @@ class CiscoIOSXEDriver(BaseDriver):
                 m = re.match(r'^interface\s+([A-Za-z][\w\-]*[A-Za-z])\s*([\d\/\.]+(?:\.\d+)?)', line, re.I)
                 if m:
                     ctx = 'interface'
-                    v = set_var('number', m.group(2))
+                    intf_type = m.group(1).lower()
+                    num_str   = m.group(2)
+                    # IOS-XE interface number ranges (from Cisco documentation)
+                    # Loopback/Tunnel/BVI/BDI: 0–2147483647 (int32 max)
+                    # Physical/Port-channel/Vlan: 0–65535 (uint16)
+                    if any(t in intf_type for t in ('loopback', 'tunnel', 'bvi', 'bdi')):
+                        spec = _infer_spec('number', num_str, 'uint32')
+                        spec['range'] = '0..2147483647'
+                        name = to_var('number')
+                        if name not in vars_dict:
+                            vars_dict[name] = spec
+                        v = name
+                    else:
+                        v = set_var('number', num_str)
                     tpl_lines.append(f'interface {m.group(1)}{{{{ {v} }}}}'); continue
 
                 # router bgp|ospf|eigrp|rip|isis [process/asn]

@@ -56,6 +56,7 @@ import difflib
 from backend.config_diff import generate_delta, summarise_delta, resolve_config
 from backend.drivers import get_driver
 from backend.drivers.base import render_var_form
+from backend.service_manager.manager import service_manager, ServiceManagerError
 from backend.ned_registry import NED_REGISTRY, get_ned_metadata, list_neds, ned_id_from_netmiko_type
 import json
 import yaml
@@ -108,6 +109,16 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
+    # ── Migrations: add columns that may not exist in older DB schemas ────
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE service_templates ADD COLUMN IF NOT EXISTS nd_templates JSON DEFAULT '{}'"
+            ))
+            conn.commit()
+    except Exception as _mig_err:
+        logger.debug("nd_templates migration skipped: %s", _mig_err)
     # Auto-load Network as Code files from config/ on startup
     try:
         db = next(get_db())
@@ -1741,7 +1752,8 @@ def get_var_form(
 
 
 class ValidateVarsRequest(BaseModel):
-    values: dict  # {var_name: value}
+    values: dict            # {var_name: value}
+    device_id: Optional[int] = None  # if provided, uses that device's ND for validation
 
 
 @app.post("/api/services/{svc_id}/validate-vars")
@@ -1764,13 +1776,66 @@ def validate_vars(
     ).first()
     if not svc:
         raise HTTPException(status_code=404, detail="Service template not found")
-    driver = get_driver(svc.ned_id)
-    logger.info(
-        "[validate-vars] svc_id=%d ned=%r fields=%s",
-        svc_id, svc.ned_id, list(payload.values.keys()),
-    )
-    errors = driver.validate_vars(payload.values, svc.variables_schema or '')
+    # Route through Service Manager — uses device's ND if provided, else falls back
+    if payload.device_id:
+        device = _get_owned_device(payload.device_id, current_user.id, db)
+        errors = service_manager.validate(svc, device, payload.values)
+    else:
+        # No device selected yet — use any available ND from nd_templates
+        nd_id = (
+            next(iter((svc.nd_templates or {}).keys()), None)
+            or svc.ned_id
+            or 'cisco-ios-cli-1.0'
+        )
+        driver = get_driver(nd_id)
+        errors = driver.validate_vars(payload.values, svc.variables_schema or '')
+    logger.info("[SM] validate-vars svc_id=%d fields=%s errors=%s",
+                svc_id, list(payload.values.keys()),
+                {k: v for k, v in errors.items() if v})
     return {"errors": errors}
+
+
+class NdTemplateRequest(BaseModel):
+    template: str              # Jinja2 template for this ND
+    schema_yaml: Optional[str] = None  # if provided, merged into service schema
+
+
+@app.put("/api/services/{svc_id}/nd-templates/{nd_id}")
+def upsert_nd_template(
+    svc_id: int,
+    nd_id: str,
+    payload: NdTemplateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Add or update a per-ND Jinja2 template on a service.
+    Optionally merges a new schema (from CLI convert) into the shared schema.
+    Called by the frontend per-ND tab after CLI conversion.
+    """
+    svc = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == svc_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not svc:
+        raise HTTPException(status_code=404, detail="Service template not found")
+
+    # Update nd_templates — must copy the dict for SQLAlchemy to detect the change
+    templates = dict(svc.nd_templates or {})
+    templates[nd_id] = payload.template
+    svc.nd_templates = templates
+
+    # Merge schema if provided
+    if payload.schema_yaml:
+        svc.variables_schema = service_manager.merge_schemas(
+            svc.variables_schema or '', payload.schema_yaml
+        )
+
+    svc.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(svc)
+    logger.info("[SM] nd-template upserted: svc_id=%d nd=%r", svc_id, nd_id)
+    return {"nd_id": nd_id, "nd_templates": svc.nd_templates, "variables_schema": svc.variables_schema}
 
 
 @app.put("/api/services/{svc_id}", response_model=ServiceTemplateResponse)
@@ -1888,8 +1953,12 @@ def dry_run_service(
 
     device = _get_owned_device(payload.device_id, current_user.id, db)
 
-    # 1. Render template → CLI lines
-    rendered_lines = _render_template(svc.template_body, payload.variable_values)
+    # 1. Render template via Service Manager (picks correct ND template for device)
+    try:
+        rendered = service_manager.render(svc, device, payload.variable_values)
+    except ServiceManagerError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    rendered_lines = [l for l in rendered.splitlines() if l.strip()]
 
     # 2. Pull running config from device
     username, plain_password = _resolve_device_credentials(device, db)
@@ -1958,7 +2027,12 @@ def deploy_service(
         raise HTTPException(status_code=404, detail="Service template not found")
 
     device = _get_owned_device(payload.device_id, current_user.id, db)
-    lines = _render_template(svc.template_body, payload.variable_values)
+    # Render via Service Manager — resolves the right ND template for this device
+    try:
+        rendered = service_manager.render(svc, device, payload.variable_values)
+    except ServiceManagerError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    lines = [l for l in rendered.splitlines() if l.strip()]
 
     username, plain_password = _resolve_device_credentials(device, db)
 
