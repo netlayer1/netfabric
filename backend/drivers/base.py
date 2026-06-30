@@ -90,6 +90,58 @@ _INT_BOUNDS: dict[str, tuple[int, int]] = {
 }
 
 
+def validate_var_value(key: str, value: str, spec: dict) -> str | None:
+    """
+    Validate a single variable value against its YANG spec.
+    Returns an error message string, or None if valid.
+    This is the default NED-agnostic implementation; NEDs can call or override it.
+    """
+    type_  = spec.get('type', 'string')
+    req    = spec.get('required', True)
+    label  = spec.get('label') or key.replace('_', ' ').title()
+    v      = str(value).strip()
+
+    if not v:
+        return f'{label} is required' if req else None
+
+    if type_ in _INT_BOUNDS:
+        if not re.fullmatch(r'-?\d+', v):
+            return f'{label} must be a whole number'
+        n = int(v)
+        lo, hi = _INT_BOUNDS[type_]
+        # honour per-field range override if present
+        r = str(spec.get('range', ''))
+        m = re.match(r'(-?\d+)\s*\.\.\s*(-?\d+)', r)
+        if m:
+            lo, hi = int(m.group(1)), int(m.group(2))
+        if n < lo or n > hi:
+            return f'{label} must be between {lo} and {hi}'
+        return None
+
+    if type_ == 'ipv4-address':
+        if not _valid_ip(v):
+            return f'{label} must be a valid IPv4 address (e.g. 192.168.1.1)'
+        return None
+
+    if type_ == 'ipv4-prefix-mask':
+        if v not in _VALID_MASKS:
+            return f'{label} must be a valid subnet mask (e.g. 255.255.255.0)'
+        return None
+
+    if type_ == 'boolean':
+        if v not in ('true', 'false'):
+            return f'{label} must be true or false'
+        return None
+
+    if type_ == 'enumeration':
+        allowed = [str(e) for e in (spec.get('enum') or [])]
+        if allowed and v not in allowed:
+            return f'{label} must be one of: {", ".join(allowed)}'
+        return None
+
+    return None  # string — any value is fine
+
+
 def render_var_form(schema_yaml: str) -> str:  # noqa: C901
     """
     Render a YANG-typed variable schema (YAML text) as ready-to-inject HTML
@@ -170,37 +222,31 @@ def render_var_form(schema_yaml: str) -> str:  # noqa: C901
             )
 
         elif type_ in _INT_BOUNDS:
-            lo, hi = _range(spec, type_)
-            min_a  = f'min="{lo}"' if lo is not None else ''
-            max_a  = f'max="{hi}"' if hi is not None else ''
             widget = (
-                f'<input type="number" data-varkey="{ek}" data-type="{et}" '
+                f'<input type="text" inputmode="numeric" data-varkey="{ek}" data-type="{et}" '
                 f'value="{default}" placeholder="{default or ek}" '
-                f'{min_a} {max_a} step="1" {req_attr} '
-                f'oninput="validateVarField(this)" />'
+                f'{req_attr} onblur="validateVarField(this)" />'
             )
 
         elif type_ == 'ipv4-address':
             widget = (
                 f'<input type="text" data-varkey="{ek}" data-type="{et}" '
                 f'value="{default}" placeholder="e.g. 192.168.1.1" '
-                f'pattern="{_IP_PATTERN}" title="IPv4 address (e.g. 192.168.1.1)" '
-                f'{req_attr} oninput="validateVarField(this)" />'
+                f'{req_attr} onblur="validateVarField(this)" />'
             )
 
         elif type_ == 'ipv4-prefix-mask':
             widget = (
                 f'<input type="text" data-varkey="{ek}" data-type="{et}" '
                 f'value="{default}" placeholder="e.g. 255.255.255.0" '
-                f'pattern="{_IP_PATTERN}" title="Subnet mask (e.g. 255.255.255.0)" '
-                f'{req_attr} oninput="validateVarField(this)" />'
+                f'{req_attr} onblur="validateVarField(this)" />'
             )
 
         else:  # string + anything unknown
             widget = (
                 f'<input type="text" data-varkey="{ek}" data-type="{et}" '
                 f'value="{default}" placeholder="{default or ek}" '
-                f'{req_attr} oninput="validateVarField(this)" />'
+                f'{req_attr} onblur="validateVarField(this)" />'
             )
 
         hint_html = (
@@ -382,3 +428,33 @@ class BaseDriver(ABC):
         raise NotImplementedError(
             f"{self.__class__.__name__} ({self.NED_ID}) does not support CLI conversion yet."
         )
+
+    def validate_vars(self, values: dict, schema_yaml: str) -> dict[str, str | None]:
+        """
+        Validate a dict of {var_name: value} against the service's YANG schema.
+
+        Returns {var_name: error_message_or_None}.
+        The default implementation uses the shared YANG type rules in
+        validate_var_value(). Individual NEDs can override this to add
+        device-specific constraints (e.g. IOS-XE BGP ASN range, FortiOS
+        interface naming rules, etc.).
+
+        Called by POST /api/services/{svc_id}/validate-vars — the frontend
+        sends values here on blur, and the NED's error messages are displayed.
+        """
+        import yaml as _yaml
+        try:
+            schema = _yaml.safe_load(schema_yaml or '') or {}
+        except Exception:
+            schema = {}
+
+        errors: dict[str, str | None] = {}
+        for key, value in values.items():
+            spec = schema.get(key, {})
+            if not isinstance(spec, dict):
+                spec = {'type': 'string', 'default': str(spec or '')}
+            err = validate_var_value(key, str(value), spec)
+            if err:
+                _log.info("[%s] validate_vars: %s=%r → %s", self.NED_ID, key, value, err)
+            errors[key] = err
+        return errors

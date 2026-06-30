@@ -1733,7 +1733,44 @@ def get_var_form(
     ).first()
     if not svc:
         raise HTTPException(status_code=404, detail="Service template not found")
+    logger.info(
+        "[var-form] svc_id=%d name=%r ned=%r user=%s",
+        svc_id, svc.name, svc.ned_id, current_user.email,
+    )
     return HTMLResponse(content=render_var_form(svc.variables_schema or ''))
+
+
+class ValidateVarsRequest(BaseModel):
+    values: dict  # {var_name: value}
+
+
+@app.post("/api/services/{svc_id}/validate-vars")
+def validate_vars(
+    svc_id: int,
+    payload: ValidateVarsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Validate variable values against the service schema via the NED.
+
+    The NED (e.g. CiscoIOSXEDriver) owns the validate_vars() method —
+    it checks YANG types and can enforce device-specific constraints on top.
+    Returns {errors: {field: message_or_null}}.
+    """
+    svc = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == svc_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not svc:
+        raise HTTPException(status_code=404, detail="Service template not found")
+    driver = get_driver(svc.ned_id)
+    logger.info(
+        "[validate-vars] svc_id=%d ned=%r fields=%s",
+        svc_id, svc.ned_id, list(payload.values.keys()),
+    )
+    errors = driver.validate_vars(payload.values, svc.variables_schema or '')
+    return {"errors": errors}
 
 
 @app.put("/api/services/{svc_id}", response_model=ServiceTemplateResponse)

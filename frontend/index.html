@@ -3181,24 +3181,49 @@ async function openDeployModal(svcId) {
   } catch(e) { showToast(e.message || 'Failed to open deploy', 'error'); }
 }
 
-// ── Field-level validation (HTML5 native — YANG type knowledge lives in backend) ──
+// ── NED-driven field validation — messages come from the backend NED ─────────
 
-function validateVarField(input) {
+function _varFieldError(input, msg) {
   const errEl = input.nextElementSibling;
   if (!errEl) return;
-  const ok = input.checkValidity();
-  input.style.borderColor = ok ? '' : 'var(--danger)';
-  errEl.textContent = ok ? '' : (input.validationMessage || 'Invalid value');
-  errEl.style.display = ok ? 'none' : 'block';
+  input.style.borderColor = msg ? 'var(--danger)' : '';
+  errEl.textContent = msg || '';
+  errEl.style.display = msg ? 'block' : 'none';
 }
 
-function _validateAllVarFields() {
-  let valid = true;
-  document.querySelectorAll('#svc-deploy-vars input[data-varkey], #svc-deploy-vars select[data-varkey]').forEach(inp => {
-    validateVarField(inp);
-    if (!inp.checkValidity()) valid = false;
-  });
-  return valid;
+// Called on blur — sends the value to the NED via API and shows its message
+async function validateVarField(input) {
+  if (!_svcDeployId) return;
+  const key = input.dataset.varkey;
+  if (!key) return;
+  try {
+    const r = await api('POST', `/api/services/${_svcDeployId}/validate-vars`, {
+      values: { [key]: input.value }
+    });
+    _varFieldError(input, r.errors?.[key] || null);
+  } catch(_) {
+    // don't block the user if the API is unreachable
+  }
+}
+
+// Called before deploy — validates all fields in one API round-trip
+async function _validateAllVarFields() {
+  if (!_svcDeployId) return true;
+  const inputs = [...document.querySelectorAll('#svc-deploy-vars input[data-varkey], #svc-deploy-vars select[data-varkey]')];
+  if (!inputs.length) return true;
+  const values = Object.fromEntries(inputs.map(i => [i.dataset.varkey, i.value]));
+  try {
+    const r = await api('POST', `/api/services/${_svcDeployId}/validate-vars`, { values });
+    let valid = true;
+    inputs.forEach(inp => {
+      const msg = r.errors?.[inp.dataset.varkey] || null;
+      _varFieldError(inp, msg);
+      if (msg) valid = false;
+    });
+    return valid;
+  } catch(_) {
+    return true;
+  }
 }
 
 function livePreview() { /* no-op — dry run replaces auto-preview */ }
@@ -3207,7 +3232,7 @@ async function runDryRun() {
   if (!_svcDeployId) return;
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
   if (!deviceId) { showToast('Select a device first', 'error'); return; }
-  if (!_validateAllVarFields()) { showToast('Fix invalid fields before running', 'error'); return; }
+  if (!await _validateAllVarFields()) { showToast('Fix invalid fields before running', 'error'); return; }
 
   const btn      = document.getElementById('svc-dryrun-btn');
   const statusEl = document.getElementById('svc-dryrun-status');
@@ -3268,7 +3293,7 @@ async function deployService() {
   if (!_svcDeployId) return;
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
   if (!deviceId) { showToast('Select a device', 'error'); return; }
-  if (!_validateAllVarFields()) { showToast('Fix invalid fields before deploying', 'error'); return; }
+  if (!await _validateAllVarFields()) { showToast('Fix invalid fields before deploying', 'error'); return; }
 
   const btn        = document.getElementById('svc-deploy-btn');
   const varValues  = _collectVarValues();
