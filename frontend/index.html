@@ -3352,9 +3352,66 @@ function buildVarForm(schemaYaml) {
         <label>${escHtml(label)}</label>
         <input type="text" data-varkey="${escHtml(key)}"
                value="${escHtml(defVal)}" placeholder="${escHtml(defVal || key)}"
-               oninput="livePreview()" />
+               oninput="livePreview(); validateVarField(this)" />
+        <div class="var-field-error" style="color:var(--danger);font-size:11px;margin-top:3px;display:none;"></div>
       </div>`;
   }).join('');
+}
+
+function _isIpField(key) {
+  return /ip|address|addr/i.test(key);
+}
+function _isMaskField(key) {
+  return /mask|netmask|subnet/i.test(key);
+}
+function _validIp(val) {
+  return /^(\d{1,3}\.){3}\d{1,3}$/.test(val) &&
+    val.split('.').every(o => {
+      const n = parseInt(o, 10);
+      return n >= 0 && n <= 255 && String(n) === o; // no leading zeros
+    });
+}
+// Valid subnet masks only (contiguous 1s followed by 0s)
+const _VALID_MASKS = new Set([
+  '0.0.0.0','128.0.0.0','192.0.0.0','224.0.0.0','240.0.0.0',
+  '248.0.0.0','252.0.0.0','254.0.0.0','255.0.0.0',
+  '255.128.0.0','255.192.0.0','255.224.0.0','255.240.0.0',
+  '255.248.0.0','255.252.0.0','255.254.0.0','255.255.0.0',
+  '255.255.128.0','255.255.192.0','255.255.224.0','255.255.240.0',
+  '255.255.248.0','255.255.252.0','255.255.254.0','255.255.255.0',
+  '255.255.255.128','255.255.255.192','255.255.255.224','255.255.255.240',
+  '255.255.255.248','255.255.255.252','255.255.255.254','255.255.255.255',
+]);
+
+function validateVarField(input) {
+  const key = input.dataset.varkey || '';
+  const val = input.value.trim();
+  const errEl = input.nextElementSibling;
+  let msg = '';
+
+  if (val && _isIpField(key) && !_isMaskField(key)) {
+    if (!_validIp(val)) msg = 'Invalid IP address';
+  } else if (val && _isMaskField(key)) {
+    if (!_VALID_MASKS.has(val)) msg = 'Invalid subnet mask (e.g. 255.255.255.0)';
+  }
+
+  if (msg) {
+    input.style.borderColor = 'var(--danger)';
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  } else {
+    input.style.borderColor = '';
+    errEl.style.display = 'none';
+  }
+}
+
+function _validateAllVarFields() {
+  let valid = true;
+  document.querySelectorAll('#svc-deploy-vars input[data-varkey]').forEach(inp => {
+    validateVarField(inp);
+    if (inp.nextElementSibling && inp.nextElementSibling.style.display !== 'none') valid = false;
+  });
+  return valid;
 }
 
 function livePreview() { /* no-op — dry run replaces auto-preview */ }
@@ -3363,6 +3420,7 @@ async function runDryRun() {
   if (!_svcDeployId) return;
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
   if (!deviceId) { showToast('Select a device first', 'error'); return; }
+  if (!_validateAllVarFields()) { showToast('Fix invalid fields before running', 'error'); return; }
 
   const btn      = document.getElementById('svc-dryrun-btn');
   const statusEl = document.getElementById('svc-dryrun-status');
@@ -3423,6 +3481,7 @@ async function deployService() {
   if (!_svcDeployId) return;
   const deviceId = parseInt(document.getElementById('svc-deploy-device').value, 10);
   if (!deviceId) { showToast('Select a device', 'error'); return; }
+  if (!_validateAllVarFields()) { showToast('Fix invalid fields before deploying', 'error'); return; }
 
   const btn        = document.getElementById('svc-deploy-btn');
   const varValues  = _collectVarValues();
@@ -5109,7 +5168,8 @@ async function loadNeds() {
   grid.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
   try {
     const r = await api('GET', '/api/neds');
-    const neds = r.neds || [];
+    const ACTIVE_NEDS = ['cisco-ios-cli-1.0', 'fortinet-fortios-cli-1.0'];
+    const neds = (r.neds || []).filter(n => ACTIVE_NEDS.includes(n.ned_id));
     grid.innerHTML = neds.map(n => `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
