@@ -46,7 +46,7 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -55,6 +55,7 @@ from backend.database import engine, get_db, Base
 import difflib
 from backend.config_diff import generate_delta, summarise_delta, resolve_config
 from backend.drivers import get_driver
+from backend.drivers.base import render_var_form
 from backend.ned_registry import NED_REGISTRY, get_ned_metadata, list_neds, ned_id_from_netmiko_type
 import json
 import yaml
@@ -237,6 +238,32 @@ def get_ned(ned_id: str):
         **meta.to_dict(),
         "live_status_categories": driver.get_live_status_categories(),
     }
+
+
+class CliConvertRequest(BaseModel):
+    cli: str
+
+
+@app.post("/api/neds/{ned_id}/cli-convert")
+def cli_convert(ned_id: str, payload: CliConvertRequest):
+    """
+    Convert raw CLI config to a YANG-typed variable schema + Jinja2 template.
+
+    Each NED implements its own parser — the correct types (ipv4-address,
+    uint32, ipv4-prefix-mask, etc.) are inferred from the CLI syntax and
+    values, never guessed in the browser.
+
+    Returns:
+        schema         — YANG-style YAML variable definitions
+        template       — Jinja2 template string
+        variable_count — number of extracted variables
+    """
+    driver = get_driver(ned_id)
+    try:
+        result = driver.cli_to_template(payload.cli)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return result
 
 
 # ─────────────────────────────────────────────
@@ -1685,6 +1712,28 @@ def get_service_template(
     if not svc:
         raise HTTPException(status_code=404, detail="Service template not found")
     return svc
+
+
+@app.get("/api/services/{svc_id}/var-form", response_class=HTMLResponse)
+def get_var_form(
+    svc_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return the variable input form for a service template as ready-to-inject HTML.
+
+    The backend owns all YANG type knowledge (render_var_form lives in base.py
+    alongside _infer_spec / _schema_to_yaml). The frontend just fetches this
+    and inserts it into the deploy modal — no JS type logic needed.
+    """
+    svc = db.query(ServiceTemplate).filter(
+        ServiceTemplate.id == svc_id,
+        ServiceTemplate.user_id == current_user.id,
+    ).first()
+    if not svc:
+        raise HTTPException(status_code=404, detail="Service template not found")
+    return HTMLResponse(content=render_var_form(svc.variables_schema or ''))
 
 
 @app.put("/api/services/{svc_id}", response_model=ServiceTemplateResponse)

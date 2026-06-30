@@ -3077,212 +3077,62 @@ function svcSwitchTab(tab) {
   });
 }
 
-function svcCliConvert() {
+async function svcCliConvert() {
   const raw = document.getElementById('svc-cli').value;
   if (!raw.trim()) { showToast('Paste some CLI config first', 'error'); return; }
 
-  // Always auto-detect syntax from content — NED selection doesn't force a parser.
-  // FortiOS: non-indented "config <context>" alongside "edit" or "set" lines.
-  const fortiOSBySniff = /^config\s+\S/m.test(raw) && (/^edit\s+/m.test(raw) || /^set\s+/m.test(raw));
+  // NED ID comes from the service being edited, falling back to IOS-XE.
+  const nedId = document.getElementById('svc-ned-id')?.value || 'cisco-ios-cli-1.0';
 
-  if (fortiOSBySniff) {
-    _svcCliConvertFortiOS(raw);
-  } else {
-    _svcCliConvertIOS(raw);
+  const btn = document.querySelector('#svc-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Converting…'; }
+
+  try {
+    const r = await api('POST', `/api/neds/${encodeURIComponent(nedId)}/cli-convert`, { cli: raw });
+    document.getElementById('svc-schema').value   = r.schema;
+    document.getElementById('svc-template').value = r.template;
+    showToast(`Converted — ${r.variable_count} variable${r.variable_count !== 1 ? 's' : ''} extracted`, 'success');
+    svcSwitchTab('vars');
+  } catch(e) {
+    showToast(e.message || 'Conversion failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
 
-// ── FortiOS converter ─────────────────────────────────────────────────────────
-function _svcCliConvertFortiOS(raw) {
-  const vars     = {};
-  const tplLines = [];
-  const IP_RE    = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
+// CLI conversion is handled by POST /api/neds/{ned_id}/cli-convert (backend ND drivers).
 
-  function toVarName(s) {
-    return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  }
-  function setVar(name, defaultVal) {
-    name = toVarName(name);
-    if (!(name in vars)) vars[name] = defaultVal;
-    return name;
-  }
-  function stripQuotes(s) { return s.replace(/^["']|["']$/g, '').trim(); }
-
-  // Track edit-context so we can name the variable sensibly
-  // e.g. inside "config system interface" the edit target is the interface name
-  let configContext = '';
-
-  for (const rawLine of raw.split('\n')) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    // config <context> — block opener, keep verbatim
-    const configM = line.match(/^config\s+(.+)/i);
-    if (configM) {
-      configContext = configM[1].trim();
-      tplLines.push(`config ${configM[1]}`);
-      continue;
-    }
-
-    // edit <value> — object key; parameterize the value
-    const editM = line.match(/^edit\s+(.+)/i);
-    if (editM) {
-      const val   = stripQuotes(editM[1]);
-      // derive a meaningful var name from context (last word of "config system interface" → "interface_name")
-      const ctx   = configContext.split(/\s+/).pop() || 'name';
-      const vname = setVar(`${toVarName(ctx)}_name`, val);
-      tplLines.push(`edit {{ ${vname} }}`);
-      continue;
-    }
-
-    // set <key> <value> — parameterize ALL set fields
-    // Keywords with no meaningful value to vary are kept verbatim (enable/disable/always/accept/deny)
-    const STATIC_VALUES = /^(enable|disable|always|never|accept|deny|all)$/i;
-    const setM = line.match(/^set\s+(\S+)\s+(.*)/i);
-    if (setM) {
-      const key = setM[1];
-      const val = stripQuotes(setM[2].trim());
-      if (STATIC_VALUES.test(val)) {
-        // Fixed keyword — keep as-is
-        tplLines.push(line);
-      } else {
-        const vname = setVar(toVarName(key), val);
-        tplLines.push(`set ${key} {{ ${vname} }}`);
-      }
-      continue;
-    }
-
-    // next / end / standalone keywords — keep verbatim
-    tplLines.push(line);
-  }
-
-  const schema = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join('\n');
-  document.getElementById('svc-schema').value   = schema;
-  document.getElementById('svc-template').value = tplLines.join('\n');
-
-  const count = Object.keys(vars).length;
-  showToast(`Converted (FortiOS) — ${count} variable${count !== 1 ? 's' : ''} extracted`, 'success');
-  svcSwitchTab('vars');
-}
-
-// ── IOS / IOS-XE converter (original) ────────────────────────────────────────
-function _svcCliConvertIOS(raw) {
-  const vars     = {};
-  const tplLines = [];
-  const SKIP_RE  = /^(current configuration|building configuration|end\s*$|!)/i;
-  const IP_RE    = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/;
-
-  function toVarName(s) {
-    return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  }
-  function setVar(name, defaultVal) {
-    name = toVarName(name);
-    if (!(name in vars)) vars[name] = defaultVal;
-    return name;
-  }
-  function parameteriseIPs(text, baseName) {
-    let idx = 0;
-    return text.replace(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/g, (ip) => {
-      const vname = setVar(idx === 0 ? baseName : `${baseName}_${idx}`, ip);
-      idx++;
-      return `{{ ${vname} }}`;
-    });
-  }
-
-  for (const rawLine of raw.split('\n')) {
-    const line    = rawLine.trim();
-    const isChild = rawLine.length > 0 && (rawLine[0] === ' ' || rawLine[0] === '\t');
-
-    if (!line || SKIP_RE.test(line)) continue;
-
-    if (!isChild) {
-      const ifM = line.match(/^interface\s+([A-Za-z\-]+)\s*([\d\/\.]+(?:\.\d+)?)/i);
-      if (ifM) {
-        const vname = setVar('name', ifM[2].trim());
-        tplLines.push(`interface ${ifM[1]}{{ ${vname} }}`);
-        continue;
-      }
-
-      const rtrM = line.match(/^router\s+(\S+)(?:\s+(\d+))?/i);
-      if (rtrM) {
-        if (rtrM[2] !== undefined) {
-          const vname = setVar(`${toVarName(rtrM[1])}_process`, rtrM[2]);
-          tplLines.push(`router ${rtrM[1]} {{ ${vname} }}`);
-        } else {
-          tplLines.push(`router ${rtrM[1]}`);
-        }
-        continue;
-      }
-
-      if (IP_RE.test(line)) {
-        const kwM = line.match(/^(\S+)\s+(.*)/);
-        if (kwM) {
-          const newRest = parameteriseIPs(kwM[2], toVarName(kwM[1]));
-          tplLines.push(`${kwM[1]} ${newRest}`);
-          continue;
-        }
-      }
-      tplLines.push(line);
-
-    } else {
-      const ipAddrM = line.match(/^ip address\s+(\S+)\s+(\S+)/i);
-      if (ipAddrM) {
-        const iv = setVar('ip_address', ipAddrM[1]);
-        const mv = setVar('netmask',    ipAddrM[2]);
-        tplLines.push(` ip address {{ ${iv} }} {{ ${mv} }}`);
-        continue;
-      }
-
-      if (/^no ip address$/i.test(line)) {
-        const iv = setVar('ip_address', '');
-        const mv = setVar('netmask', '255.255.255.255');
-        tplLines.push(` ip address {{ ${iv} }} {{ ${mv} }}`);
-        continue;
-      }
-
-      const descM = line.match(/^description\s+(.*)/i);
-      if (descM) {
-        const vname = setVar('description', descM[1]);
-        tplLines.push(` description {{ ${vname} }}`);
-        continue;
-      }
-
-      if (IP_RE.test(line)) {
-        const kwM = line.match(/^([\w\-]+)\s+(.*)/);
-        if (kwM) {
-          const newRest = parameteriseIPs(kwM[2], toVarName(kwM[1]));
-          tplLines.push(` ${kwM[1]} ${newRest}`);
-          continue;
-        }
-      }
-
-      tplLines.push(' ' + line);
-    }
-  }
-
-  const schema = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join('\n');
-  document.getElementById('svc-schema').value   = schema;
-  document.getElementById('svc-template').value = tplLines.join('\n');
-
-  const count = Object.keys(vars).length;
-  showToast(`Converted — ${count} variable${count !== 1 ? 's' : ''} extracted`, 'success');
-  svcSwitchTab('vars');
-}
 
 function svcInsertExample(e) {
   e.preventDefault();
   const onVars = !document.getElementById('svc-panel-vars').classList.contains('hidden');
   if (onVars) {
     document.getElementById('svc-schema').value =
-`interface_name:Loopback0
-ip_address:1.1.1.1
-subnet_mask:255.255.255.255
-description:Managed by NOC`;
+`loopback_number:
+  type: uint32
+  range: "0..2147483647"
+  label: Loopback Number
+  default: 0
+  required: true
+ip_address:
+  type: ipv4-address
+  label: IP Address
+  default: 1.1.1.1
+  required: true
+netmask:
+  type: ipv4-prefix-mask
+  label: Subnet Mask
+  default: 255.255.255.0
+  required: true
+description:
+  type: string
+  label: Description
+  default: Managed by NOC`;
   } else {
     document.getElementById('svc-template').value =
-`interface {{ interface_name }}
+`interface Loopback{{ loopback_number }}
  description {{ description }}
- ip address {{ ip_address }} {{ subnet_mask }}
+ ip address {{ ip_address }} {{ netmask }}
  no shutdown`;
   }
 }
@@ -3319,97 +3169,34 @@ async function openDeployModal(svcId) {
       ).join('');
     }
 
-    buildVarForm(svc.variables_schema);
+    // Fetch rendered form HTML from the backend (all YANG type logic lives there)
+    const varContainer = document.getElementById('svc-deploy-vars');
+    varContainer.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading…</div>';
+    const formRes = await fetch(`${API}/api/services/${svcId}/var-form`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
+    varContainer.innerHTML = formRes.ok ? await formRes.text() : '';
+
     document.getElementById('svc-deploy-modal').classList.remove('hidden');
-    livePreview();   // show initial preview with defaults
   } catch(e) { showToast(e.message || 'Failed to open deploy', 'error'); }
 }
 
-function buildVarForm(schemaYaml) {
-  const container = document.getElementById('svc-deploy-vars');
-  if (!schemaYaml || !schemaYaml.trim()) {
-    container.innerHTML = '<div class="text-muted text-sm">No variables — this service has no parameters.</div>';
-    return;
-  }
-
-  const entries = [];
-  for (const raw of schemaYaml.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    const colon = line.indexOf(':');
-    if (colon === -1) continue;
-    const key    = line.slice(0, colon).trim();
-    const defVal = line.slice(colon + 1).trim();
-    if (key) entries.push([key, defVal]);
-  }
-
-  if (!entries.length) { container.innerHTML = ''; return; }
-
-  container.innerHTML = entries.map(([key, defVal]) => {
-    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    return `
-      <div class="form-group">
-        <label>${escHtml(label)}</label>
-        <input type="text" data-varkey="${escHtml(key)}"
-               value="${escHtml(defVal)}" placeholder="${escHtml(defVal || key)}"
-               oninput="livePreview(); validateVarField(this)" />
-        <div class="var-field-error" style="color:var(--danger);font-size:11px;margin-top:3px;display:none;"></div>
-      </div>`;
-  }).join('');
-}
-
-function _isIpField(key) {
-  return /ip|address|addr/i.test(key);
-}
-function _isMaskField(key) {
-  return /mask|netmask|subnet/i.test(key);
-}
-function _validIp(val) {
-  return /^(\d{1,3}\.){3}\d{1,3}$/.test(val) &&
-    val.split('.').every(o => {
-      const n = parseInt(o, 10);
-      return n >= 0 && n <= 255 && String(n) === o; // no leading zeros
-    });
-}
-// Valid subnet masks only (contiguous 1s followed by 0s)
-const _VALID_MASKS = new Set([
-  '0.0.0.0','128.0.0.0','192.0.0.0','224.0.0.0','240.0.0.0',
-  '248.0.0.0','252.0.0.0','254.0.0.0','255.0.0.0',
-  '255.128.0.0','255.192.0.0','255.224.0.0','255.240.0.0',
-  '255.248.0.0','255.252.0.0','255.254.0.0','255.255.0.0',
-  '255.255.128.0','255.255.192.0','255.255.224.0','255.255.240.0',
-  '255.255.248.0','255.255.252.0','255.255.254.0','255.255.255.0',
-  '255.255.255.128','255.255.255.192','255.255.255.224','255.255.255.240',
-  '255.255.255.248','255.255.255.252','255.255.255.254','255.255.255.255',
-]);
+// ── Field-level validation (HTML5 native — YANG type knowledge lives in backend) ──
 
 function validateVarField(input) {
-  const key = input.dataset.varkey || '';
-  const val = input.value.trim();
   const errEl = input.nextElementSibling;
-  let msg = '';
-
-  if (val && _isIpField(key) && !_isMaskField(key)) {
-    if (!_validIp(val)) msg = 'Invalid IP address';
-  } else if (val && _isMaskField(key)) {
-    if (!_VALID_MASKS.has(val)) msg = 'Invalid subnet mask (e.g. 255.255.255.0)';
-  }
-
-  if (msg) {
-    input.style.borderColor = 'var(--danger)';
-    errEl.textContent = msg;
-    errEl.style.display = 'block';
-  } else {
-    input.style.borderColor = '';
-    errEl.style.display = 'none';
-  }
+  if (!errEl) return;
+  const ok = input.checkValidity();
+  input.style.borderColor = ok ? '' : 'var(--danger)';
+  errEl.textContent = ok ? '' : (input.validationMessage || 'Invalid value');
+  errEl.style.display = ok ? 'none' : 'block';
 }
 
 function _validateAllVarFields() {
   let valid = true;
-  document.querySelectorAll('#svc-deploy-vars input[data-varkey]').forEach(inp => {
+  document.querySelectorAll('#svc-deploy-vars input[data-varkey], #svc-deploy-vars select[data-varkey]').forEach(inp => {
     validateVarField(inp);
-    if (inp.nextElementSibling && inp.nextElementSibling.style.display !== 'none') valid = false;
+    if (!inp.checkValidity()) valid = false;
   });
   return valid;
 }

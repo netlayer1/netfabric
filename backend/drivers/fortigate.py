@@ -10,7 +10,7 @@ for older FortiGate firmware that doesn't support modern algorithms.
 
 import re
 from typing import Optional
-from .base import BaseDriver
+from .base import BaseDriver, _infer_spec, _schema_to_yaml, _IP_RE
 
 # Lines FortiOS regenerates on every export — always volatile, never meaningful diffs
 _VOLATILE = re.compile(
@@ -125,3 +125,76 @@ class FortiGateDriver(BaseDriver):
                 if name:
                     names.append(name)
         return names
+
+    # ── CLI → YANG template converter ────────────────────────────────────
+
+    def cli_to_template(self, raw_cli: str) -> dict:
+        """
+        Convert FortiOS CLI config into a YANG-typed variable schema (YAML)
+        + a Jinja2 service template.
+
+        Handles config/edit/set/next/end blocks. Static toggle values
+        (enable/disable/accept/deny/all) are kept verbatim; everything
+        else is parameterised with inferred YANG types.
+        """
+        STATIC_VALUES = re.compile(
+            r'^(enable|disable|always|never|accept|deny|all)$', re.IGNORECASE
+        )
+
+        vars_dict:  dict[str, dict] = {}
+        tpl_lines:  list[str]       = []
+        config_ctx: str             = ''   # last "config <context>" keyword
+
+        def to_var(s: str) -> str:
+            return re.sub(r'[^a-z0-9]+', '_', s.strip().lower()).strip('_')
+
+        def set_var(name: str, default: str, type_override: str | None = None) -> str:
+            name = to_var(name)
+            if name not in vars_dict:
+                vars_dict[name] = _infer_spec(name, default, type_override)
+            return name
+
+        def strip_quotes(s: str) -> str:
+            return s.strip().strip('"\'')
+
+        for raw_line in raw_cli.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            # config <context> — block opener, keep verbatim
+            m = re.match(r'^config\s+(.+)', line, re.I)
+            if m:
+                config_ctx = m.group(1).strip()
+                tpl_lines.append(f'config {m.group(1)}')
+                continue
+
+            # edit <value> — parameterise the key
+            m = re.match(r'^edit\s+(.+)', line, re.I)
+            if m:
+                val  = strip_quotes(m.group(1))
+                ctx  = config_ctx.split()[-1] if config_ctx else 'name'
+                vname = set_var(f'{to_var(ctx)}_name', val)
+                tpl_lines.append(f'edit {{{{ {vname} }}}}')
+                continue
+
+            # set <key> <value>
+            m = re.match(r'^set\s+(\S+)\s+(.*)', line, re.I)
+            if m:
+                key = m.group(1)
+                val = strip_quotes(m.group(2).strip())
+                if STATIC_VALUES.match(val):
+                    tpl_lines.append(line)          # keep toggle verbatim
+                else:
+                    vname = set_var(to_var(key), val)
+                    tpl_lines.append(f'set {key} {{{{ {vname} }}}}')
+                continue
+
+            # next / end and anything else — keep verbatim
+            tpl_lines.append(line)
+
+        return {
+            'schema':         _schema_to_yaml(vars_dict),
+            'template':       '\n'.join(tpl_lines),
+            'variable_count': len(vars_dict),
+        }
